@@ -14,17 +14,23 @@ import {
   TrendingUp,
   Book,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useDarkMode } from '../contexts/DarkModeContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import SalarySection from '../components/SalarySection';
 import api from '../services/api';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { darkMode } = useDarkMode();
+  const { darkMode, toggleDarkMode } = useDarkMode();
+  const { currency, setCurrency, currencies, exchangeRates, updateExchangeRate } = useCurrency();
   const [activeSection, setActiveSection] = useState('home');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+  const [showCurrencySettings, setShowCurrencySettings] = useState(false);
 
   // Get user info from localStorage
   const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
@@ -145,12 +151,12 @@ export default function Dashboard() {
   };
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} flex transition-colors duration-300`}>
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300`}>
       {/* Sidebar */}
       <div
         className={`${
           sidebarOpen ? 'w-64' : 'w-20'
-        } ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r transition-all duration-300 flex flex-col fixed lg:relative h-screen z-50 lg:z-auto shadow-lg lg:shadow-none`}
+        } ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r transition-all duration-300 flex flex-col fixed left-0 top-0 h-screen z-50 shadow-lg`}
       >
         {/* Logo */}
         <div className={`p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between`}>
@@ -191,8 +197,24 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        {/* Logout Button */}
-        <div className={`p-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+        {/* Dark Mode Toggle and Logout */}
+        <div className={`p-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'} space-y-2`}>
+          <button
+            onClick={toggleDarkMode}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+              darkMode 
+                ? 'text-gray-300 hover:bg-gray-700' 
+                : 'text-gray-700 hover:bg-gray-50'
+            } ${!sidebarOpen && 'justify-center'}`}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? (
+              <Sun className="w-5 h-5" />
+            ) : (
+              <Moon className="w-5 h-5" />
+            )}
+            {sidebarOpen && <span className="text-sm font-medium">Dark Mode</span>}
+          </button>
           <button
             onClick={handleLogout}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
@@ -208,9 +230,9 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto lg:ml-0">
+      <div className={`overflow-auto transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
         {/* Header */}
-        <header className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b sticky top-0 z-40 transition-colors duration-300`}>
+        <header className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b fixed top-0 right-0 z-40 transition-all duration-300 ${sidebarOpen ? 'left-64' : 'left-20'}`}>
           <div className="px-6 py-4 flex items-center justify-between">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -219,6 +241,89 @@ export default function Dashboard() {
               <Menu className="w-6 h-6" />
             </button>
             <div className="flex items-center space-x-4 ml-auto">
+              {/* Currency Selector */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowCurrencyMenu(!showCurrencyMenu)}
+                  className={`px-3 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                    darkMode 
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                  title="Change currency"
+                >
+                  <span className="text-sm font-medium">{currencies[currency].symbol}</span>
+                  <span className="text-xs">{currencies[currency].code}</span>
+                </button>
+                
+                {showCurrencyMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowCurrencyMenu(false)}
+                    ></div>
+                    <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg z-20 ${
+                      darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                    }`}>
+                      {Object.values(currencies).map((curr) => (
+                        <button
+                          key={curr.code}
+                          onClick={() => {
+                            setCurrency(curr.code);
+                            setShowCurrencyMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                            currency === curr.code
+                              ? darkMode
+                                ? 'bg-indigo-900 text-indigo-300'
+                                : 'bg-indigo-50 text-indigo-600'
+                              : darkMode
+                                ? 'hover:bg-gray-700 text-gray-300'
+                                : 'hover:bg-gray-50 text-gray-700'
+                          } ${curr.code === 'USD' ? 'rounded-t-lg' : ''}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{curr.name}</span>
+                            <span className="font-medium">{curr.symbol}</span>
+                          </div>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setShowCurrencyMenu(false);
+                          setShowCurrencySettings(true);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors border-t ${
+                          darkMode ? 'border-gray-700 hover:bg-gray-700 text-gray-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                        } rounded-b-lg`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>Exchange Rates</span>
+                          <span className="text-xs">⚙️</span>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Dark Mode Toggle */}
+              <button
+                onClick={toggleDarkMode}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode 
+                    ? 'bg-gray-700 hover:bg-gray-600 text-yellow-400' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {darkMode ? (
+                  <Sun className="w-5 h-5" />
+                ) : (
+                  <Moon className="w-5 h-5" />
+                )}
+              </button>
+              
               <div className="text-right">
                 <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Welcome Back</p>
                 <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{userEmail}</p>
@@ -231,10 +336,93 @@ export default function Dashboard() {
         </header>
 
         {/* Content Area */}
-        <main className="p-6">
+        <main className="p-6 pt-24">
           {renderContent()}
         </main>
       </div>
+
+      {/* Currency Settings Modal */}
+      {showCurrencySettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50" onClick={() => setShowCurrencySettings(false)}>
+          <div 
+            className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl p-6 w-full max-w-lg shadow-xl`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Exchange Rates</h3>
+              <button
+                onClick={() => setShowCurrencySettings(false)}
+                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Set buy and sell exchange rates relative to USD (1 USD = X)
+            </p>
+
+            <div className="space-y-6 max-h-96 overflow-y-auto">
+              {Object.values(currencies).filter(curr => curr.code !== 'USD').map((curr) => (
+                <div key={curr.code} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {curr.name} ({curr.code})
+                  </label>
+                  
+                  <div className="space-y-3">
+                    {/* Buy Rate */}
+                    <div>
+                      <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Buy Rate (1 USD = X {curr.code})
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={exchangeRates[curr.code]?.buy || ''}
+                          onChange={(e) => updateExchangeRate(curr.code, 'buy', e.target.value)}
+                          className={`flex-1 px-3 py-2 rounded-lg border text-sm ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                          placeholder="0.00"
+                        />
+                        <span className={`text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{curr.code}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Sell Rate */}
+                    <div>
+                      <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Sell Rate (1 USD = X {curr.code})
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={exchangeRates[curr.code]?.sell || ''}
+                          onChange={(e) => updateExchangeRate(curr.code, 'sell', e.target.value)}
+                          className={`flex-1 px-3 py-2 rounded-lg border text-sm ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                          placeholder="0.00"
+                        />
+                        <span className={`text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{curr.code}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setShowCurrencySettings(false)}
+                className="w-full px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

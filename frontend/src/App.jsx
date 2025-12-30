@@ -3,6 +3,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './toast.css';
 import { DarkModeProvider, useDarkMode } from './contexts/DarkModeContext';
+import { CurrencyProvider } from './contexts/CurrencyContext';
 import LandingPage from './pages/LandingPage';
 import SignUp from './pages/SignUp';
 import SignIn from './pages/SignIn';
@@ -32,36 +33,38 @@ function ToastWrapper() {
 function App() {
   return (
     <DarkModeProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route 
-            path="/signup" 
-            element={
-              <PublicRoute>
-                <SignUp />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/signin" 
-            element={
-              <PublicRoute>
-                <SignIn />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-        </Routes>
-        <ToastWrapper />
-      </Router>
+      <CurrencyProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route 
+              path="/signup" 
+              element={
+                <PublicRoute>
+                  <SignUp />
+                </PublicRoute>
+              } 
+            />
+            <Route 
+              path="/signin" 
+              element={
+                <PublicRoute>
+                  <SignIn />
+                </PublicRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+          </Routes>
+          <ToastWrapper />
+        </Router>
+      </CurrencyProvider>
     </DarkModeProvider>
   );
 }
