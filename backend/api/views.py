@@ -53,10 +53,17 @@ def signup(request):
                 recipient_list=[user.email],
                 fail_silently=False,
             )
+            # In development mode (console backend), also print to console
+            if settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend':
+                print(f"\n{'='*60}")
+                print(f"VERIFICATION CODE for {user.email}: {verification_code}")
+                print(f"{'='*60}\n")
         except Exception as e:
-            # In development, print to console
-            print(f"Verification code for {user.email}: {verification_code}")
+            # Print to console if email sending fails
+            print(f"\n{'='*60}")
+            print(f"VERIFICATION CODE for {user.email}: {verification_code}")
             print(f"Email sending error: {e}")
+            print(f"{'='*60}\n")
         
         return Response({
             'message': 'User created successfully. Please check your email for verification code.',
@@ -136,10 +143,17 @@ def resend_verification_code(request):
                 recipient_list=[email],
                 fail_silently=False,
             )
+            # In development mode (console backend), also print to console
+            if settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend':
+                print(f"\n{'='*60}")
+                print(f"VERIFICATION CODE (RESENT) for {email}: {verification_code}")
+                print(f"{'='*60}\n")
         except Exception as e:
-            # In development, print to console
-            print(f"Verification code for {email}: {verification_code}")
+            # Print to console if email sending fails
+            print(f"\n{'='*60}")
+            print(f"VERIFICATION CODE (RESENT) for {email}: {verification_code}")
             print(f"Email sending error: {e}")
+            print(f"{'='*60}\n")
         
         return Response({
             'message': 'Verification code resent successfully.'

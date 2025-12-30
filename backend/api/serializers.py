@@ -12,7 +12,8 @@ class SignUpSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('first_name', 'last_name', 'email', 'password', 'confirm_password', 'username')
+        fields = ('first_name', 'last_name', 'email', 'password', 'confirm_password')
+        extra_kwargs = {'username': {'required': False}}  # Username will be auto-generated from email
 
     def validate(self, attrs):
         if attrs['password'] != attrs['confirm_password']:
@@ -40,8 +41,15 @@ class SignUpSerializer(serializers.ModelSerializer):
         last_name = validated_data.pop('last_name')
         password = validated_data.pop('password')
         
-        # Use email as username if username not provided
-        username = validated_data.get('username', email.split('@')[0])
+        # Generate username from email (before @ symbol)
+        base_username = email.split('@')[0]
+        username = base_username
+        counter = 1
+        
+        # Ensure username is unique
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
         
         user = User.objects.create_user(
             username=username,

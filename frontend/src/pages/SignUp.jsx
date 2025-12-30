@@ -37,6 +37,23 @@ function SignUp() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Frontend validation
+    if (!firstName.trim()) {
+      toast.error('First name is required');
+      return;
+    }
+    if (!lastName.trim()) {
+      toast.error('Last name is required');
+      return;
+    }
+    if (!email.trim()) {
+      toast.error('Email address is required');
+      return;
+    }
+    if (!password) {
+      toast.error('Password is required');
+      return;
+    }
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
@@ -49,9 +66,9 @@ function SignUp() {
     setIsLoading(true);
     try {
       const response = await api.post('/api/auth/signup/', {
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
         password: password,
         confirm_password: confirmPassword,
       });
@@ -65,9 +82,29 @@ function SignUp() {
       if (err.response?.data) {
         const errorData = err.response.data;
         if (typeof errorData === 'object') {
-          const firstError = Object.values(errorData)[0];
-          const errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
-          toast.error(errorMessage);
+          // Show all field errors
+          const errorMessages = [];
+          for (const [field, errors] of Object.entries(errorData)) {
+            if (Array.isArray(errors)) {
+              errors.forEach(error => {
+                errorMessages.push(`${field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ')}: ${error}`);
+              });
+            } else if (typeof errors === 'string') {
+              errorMessages.push(`${field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ')}: ${errors}`);
+            } else {
+              errorMessages.push(`${field}: ${errors}`);
+            }
+          }
+          // Show first error as toast, or combine them
+          if (errorMessages.length > 0) {
+            toast.error(errorMessages[0]);
+            // If multiple errors, show them in console or additional toasts
+            if (errorMessages.length > 1) {
+              console.error('Additional errors:', errorMessages.slice(1));
+            }
+          } else {
+            toast.error('Please check all fields and try again');
+          }
         } else {
           toast.error(errorData);
         }
@@ -380,7 +417,6 @@ function SignUp() {
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  required
                   placeholder="Doe"
                   className="form-input"
                 />
@@ -396,7 +432,6 @@ function SignUp() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
                 placeholder="you@example.com"
                 className="form-input"
               />
@@ -412,7 +447,6 @@ function SignUp() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
                   placeholder="At least 8 characters"
                   className="form-input"
                 />
@@ -440,7 +474,6 @@ function SignUp() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
                   placeholder="Re-enter your password"
                   className="form-input"
                 />
