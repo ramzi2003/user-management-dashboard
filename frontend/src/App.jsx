@@ -5,6 +5,10 @@ import './toast.css';
 import { DarkModeProvider, useDarkMode } from './contexts/DarkModeContext';
 import LandingPage from './pages/LandingPage';
 import SignUp from './pages/SignUp';
+import SignIn from './pages/SignIn';
+import Dashboard from './pages/Dashboard';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
 
 function ToastWrapper() {
   const { darkMode } = useDarkMode();
@@ -31,14 +35,30 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/signin" element={<SignUp />} />
-          <Route path="/dashboard" element={<div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-            <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Welcome to Dashboard!</h1>
-              <p className="text-gray-600 dark:text-gray-300">Your dashboard is coming soon.</p>
-            </div>
-          </div>} />
+          <Route 
+            path="/signup" 
+            element={
+              <PublicRoute>
+                <SignUp />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/signin" 
+            element={
+              <PublicRoute>
+                <SignIn />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
         <ToastWrapper />
       </Router>

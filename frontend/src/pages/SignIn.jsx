@@ -11,41 +11,25 @@ import {
   ArrowLeft,
   Eye,
   EyeOff,
-  Check,
-  Mail
+  LogIn
 } from 'lucide-react';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import api from '../services/api';
 import './SignUp.css';
 
-function SignUp() {
+function SignIn() {
   const navigate = useNavigate();
   const { darkMode } = useDarkMode();
   const [googleLoaded, setGoogleLoaded] = useState(false);
-  const [step, setStep] = useState(1); // 1 = signup form, 2 = email verification
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Frontend validation
-    if (!firstName.trim()) {
-      toast.error('First name is required');
-      return;
-    }
-    if (!lastName.trim()) {
-      toast.error('Last name is required');
-      return;
-    }
     if (!email.trim()) {
       toast.error('Email address is required');
       return;
@@ -54,61 +38,31 @@ function SignUp() {
       toast.error('Password is required');
       return;
     }
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    if (!agreedToTerms) {
-      toast.error('Please agree to the terms and conditions');
-      return;
-    }
 
     setIsLoading(true);
     try {
-      const response = await api.post('/api/auth/signup/', {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
+      const response = await api.post('/api/auth/login/', {
         email: email.trim(),
         password: password,
-        confirm_password: confirmPassword,
       });
 
-      if (response.status === 201 || response.status === 200) {
-        if (response.status === 200) {
-          toast.success('Verification code resent! Please check your email.');
-        } else {
-          toast.success('Account created! Please check your email for verification code.');
+      if (response.status === 200) {
+        toast.success('Login successful! Redirecting...');
+        // Store user info
+        if (response.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.user));
         }
-        // Move to verification step
-        setStep(2);
+        // Redirect to dashboard
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
       }
     } catch (err) {
       if (err.response?.data) {
         const errorData = err.response.data;
         if (typeof errorData === 'object') {
-          // Show all field errors
-          const errorMessages = [];
-          for (const [field, errors] of Object.entries(errorData)) {
-            if (Array.isArray(errors)) {
-              errors.forEach(error => {
-                errorMessages.push(`${field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ')}: ${error}`);
-              });
-            } else if (typeof errors === 'string') {
-              errorMessages.push(`${field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ')}: ${errors}`);
-            } else {
-              errorMessages.push(`${field}: ${errors}`);
-            }
-          }
-          // Show first error as toast, or combine them
-          if (errorMessages.length > 0) {
-            toast.error(errorMessages[0]);
-            // If multiple errors, show them in console or additional toasts
-            if (errorMessages.length > 1) {
-              console.error('Additional errors:', errorMessages.slice(1));
-            }
-          } else {
-            toast.error('Please check all fields and try again');
-          }
+          const firstError = Object.values(errorData)[0];
+          toast.error(Array.isArray(firstError) ? firstError[0] : firstError);
         } else {
           toast.error(errorData);
         }
@@ -138,69 +92,7 @@ function SignUp() {
     };
   }, []);
 
-  const handleVerifyEmail = async (e) => {
-    e.preventDefault();
-    
-    if (verificationCode.length !== 6) {
-      toast.error('Please enter a valid 6-digit code.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await api.post('/api/auth/verify-email/', {
-        email: email,
-        code: verificationCode,
-      });
-
-      if (response.status === 200) {
-        toast.success('Email verified successfully! Redirecting...');
-        // Store user info
-        const userData = {
-          id: response.data.user_id,
-          email: email,
-          first_name: firstName,
-          last_name: lastName
-        };
-        localStorage.setItem('user', JSON.stringify(userData));
-        // Redirect to dashboard
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1500);
-      }
-    } catch (err) {
-      if (err.response?.data) {
-        const errorData = err.response.data;
-        if (typeof errorData === 'object') {
-          const firstError = Object.values(errorData)[0];
-          const errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
-          toast.error(errorMessage);
-        } else {
-          toast.error(errorData);
-        }
-      } else {
-        toast.error('Invalid verification code. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendCode = async () => {
-    setIsLoading(true);
-    try {
-      await api.post('/api/auth/resend-code/', {
-        email: email,
-      });
-      toast.success('Verification code resent to your email.');
-    } catch (err) {
-      toast.error('Failed to resend code. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSignUp = () => {
+  const handleGoogleSignIn = () => {
     if (!googleLoaded) {
       toast.warning('Google Sign-In is still loading. Please wait a moment.');
       return;
@@ -250,7 +142,7 @@ function SignUp() {
       });
       client.requestAccessToken();
     } else {
-      toast.error('Google Sign-In is not available. Please use manual sign up.');
+      toast.error('Google Sign-In is not available. Please use manual sign in.');
       setIsLoading(false);
     }
   };
@@ -307,10 +199,10 @@ function SignUp() {
         <div className="signup-left-content">
           <div>
             <h2 className="signup-left-title">
-              Your Life,<br />Organized
+              Welcome Back
             </h2>
             <p className="signup-left-subtitle">
-              Join thousands managing every aspect of their life in one beautiful place.
+              Sign in to continue managing your life in one beautiful place.
             </p>
           </div>
 
@@ -372,20 +264,19 @@ function SignUp() {
           {/* Header */}
           <div className="signup-form-header">
             <h1 className="signup-form-title">
-              Create Your Account
+              Sign In to Your Account
             </h1>
             <p className="signup-form-subtitle">
-              Join us and start organizing your life today.
+              Welcome back! Please enter your details to continue.
             </p>
           </div>
 
-          {/* Step 1: Sign Up Form */}
-          {step === 1 && (
+          {/* Sign In Form */}
           <form onSubmit={handleSubmit} className="signup-form">
-            {/* Google Sign Up Button */}
+            {/* Google Sign In Button */}
             <button
               type="button"
-              onClick={handleGoogleSignUp}
+              onClick={handleGoogleSignIn}
               disabled={isLoading}
               className="google-signup-btn"
             >
@@ -402,35 +293,6 @@ function SignUp() {
               <span>or</span>
             </div>
 
-            {/* Name Fields */}
-            <div className="form-row">
-              <div className="form-field">
-                <label className="form-label">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                  placeholder="John"
-                  className="form-input"
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Doe"
-                  className="form-input"
-                />
-              </div>
-            </div>
-
             {/* Email Input */}
             <div className="form-field">
               <label className="form-label">
@@ -442,6 +304,7 @@ function SignUp() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 className="form-input"
+                required
               />
             </div>
 
@@ -455,8 +318,9 @@ function SignUp() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
+                  placeholder="Enter your password"
                   className="form-input"
+                  required
                 />
                 <button
                   type="button"
@@ -472,141 +336,45 @@ function SignUp() {
               </div>
             </div>
 
-            {/* Confirm Password Input */}
-            <div className="form-field">
-              <label className="form-label">
-                Confirm Password
-              </label>
-              <div className="password-input-wrapper">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your password"
-                  className="form-input"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="password-toggle"
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Terms & Conditions */}
-            <div className="terms-container">
-              <input
-                type="checkbox"
-                id="terms"
-                checked={agreedToTerms}
-                onChange={(e) => setAgreedToTerms(e.target.checked)}
-                className="terms-checkbox"
-              />
-              <label htmlFor="terms" className="terms-label">
-                I agree to the{' '}
-                <a href="#" className="terms-link">
-                  Terms of Service
-                </a>{' '}
-                and{' '}
-                <a href="#" className="terms-link">
-                  Privacy Policy
-                </a>
-              </label>
+            {/* Forgot Password Link */}
+            <div className="flex justify-end mb-2">
+              <Link to="#" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                Forgot password?
+              </Link>
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading || !email || !password || !confirmPassword || !agreedToTerms}
+              disabled={isLoading || !email || !password}
               className="submit-button"
             >
               {isLoading ? (
                 <>
                   <div className="spinner"></div>
-                  <span>Creating Account...</span>
+                  <span>Signing In...</span>
                 </>
               ) : (
                 <>
-                  <Check className="w-5 h-5" />
-                  <span>Create Account</span>
+                  <LogIn className="w-5 h-5" />
+                  <span>Sign In</span>
                 </>
               )}
             </button>
           </form>
-          )}
 
-          {/* Step 2: Email Verification */}
-          {step === 2 && (
-            <form onSubmit={handleVerifyEmail} className="signup-form">
-              <div className="verification-header">
-                <Mail className="w-12 h-12 text-indigo-500 dark:text-indigo-400 mb-4" />
-                <h2 className="signup-form-title">
-                  Verify Your Email
-                </h2>
-                <p className="signup-form-subtitle">
-                  We've sent a verification code to
-                </p>
-                <p className="text-gray-900 dark:text-white font-semibold mb-4">
-                  {email}
-                </p>
-              </div>
-
-              <div className="form-field">
-                <label className="form-label">
-                  Verification Code
-                </label>
-                <input
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                    setVerificationCode(value);
-                  }}
-                  required
-                  maxLength="6"
-                  placeholder="000000"
-                  className="verification-input"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading || verificationCode.length !== 6}
-                className="submit-button"
-              >
-                {isLoading ? 'Verifying...' : 'Verify Email'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleResendCode}
-                disabled={isLoading}
-                className="resend-button"
-              >
-                Resend Code
-              </button>
-            </form>
-          )}
-
-          {/* Sign In Link */}
-          {step === 1 && (
-            <p className="signin-link">
-              Already have an account?{' '}
-              <Link to="/signin" className="signin-link-text">
-                Sign in
-              </Link>
-            </p>
-          )}
+          {/* Sign Up Link */}
+          <p className="signin-link">
+            Don't have an account?{' '}
+            <Link to="/signup" className="signin-link-text">
+              Sign up
+            </Link>
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-export default SignUp;
+export default SignIn;
+

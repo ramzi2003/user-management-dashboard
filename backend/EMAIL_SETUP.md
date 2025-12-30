@@ -28,12 +28,14 @@ EMAIL_PORT=587
 EMAIL_USE_TLS=True
 EMAIL_HOST_USER=your-email@gmail.com
 EMAIL_HOST_PASSWORD=your-16-character-app-password
-DEFAULT_FROM_EMAIL=noreply@lifedashboard.com
+DEFAULT_FROM_EMAIL=your-email@gmail.com
 ```
 
 Replace:
-- `your-email@gmail.com` with your Gmail address
+- `your-email@gmail.com` with your Gmail address (this will be the sender address)
 - `your-16-character-app-password` with the App Password you generated (remove spaces)
+
+**Important:** The verification emails will be sent **FROM** the Gmail account you configure here (`EMAIL_HOST_USER`) **TO** the user's email address (the one they enter during signup). Gmail requires that you send emails from the authenticated account, so make sure to use a Gmail account you have access to.
 
 ## Step 4: Load environment variables
 

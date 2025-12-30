@@ -1,8 +1,9 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import SignUpSerializer, EmailVerificationSerializer
+from .serializers import SignUpSerializer, EmailVerificationSerializer, LoginSerializer
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from django.core.mail import send_mail
 from django.conf import settings
 import random
@@ -34,6 +35,42 @@ def api_info(request):
 @api_view(['POST'])
 def signup(request):
     """User registration endpoint"""
+    email = request.data.get('email', '').strip()
+    
+    # Check if user exists but not verified - resend code instead
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user and not existing_user.is_active:
+        # User exists but not verified - resend verification code
+        verification_code = ''.join(random.choices(string.digits, k=6))
+        cache.set(f'verification_code_{email}', verification_code, 600)
+        
+        # Send verification email
+        try:
+            send_mail(
+                subject='Verify your Life Dashboard account',
+                message=f'Your verification code is: {verification_code}\n\nThis code will expire in 10 minutes.',
+                from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@lifedashboard.com',
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            # In development mode (console backend), also print to console
+            if settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend':
+                print(f"\n{'='*60}")
+                print(f"VERIFICATION CODE (RESENT) for {email}: {verification_code}")
+                print(f"{'='*60}\n")
+        except Exception as e:
+            # Print to console if email sending fails
+            print(f"\n{'='*60}")
+            print(f"VERIFICATION CODE (RESENT) for {email}: {verification_code}")
+            print(f"Email sending error: {e}")
+            print(f"{'='*60}\n")
+        
+        return Response({
+            'message': 'Verification code resent. Please check your email.',
+            'email': email
+        }, status=status.HTTP_200_OK)
+    
+    # Proceed with normal signup
     serializer = SignUpSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
@@ -73,6 +110,62 @@ def signup(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+def login(request):
+    """User login endpoint"""
+    serializer = LoginSerializer(data=request.data)
+    if serializer.is_valid():
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+        
+        # Find user by email
+        try:
+            user = User.objects.filter(email=email).latest('id')
+        except User.DoesNotExist:
+            return Response({
+                'error': 'Invalid email or password.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Authenticate user
+        authenticated_user = authenticate(username=user.username, password=password)
+        
+        if authenticated_user is None:
+            return Response({
+                'error': 'Invalid email or password.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not authenticated_user.is_active:
+            return Response({
+                'error': 'Your account is not verified. Please verify your email first.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Return user info
+        return Response({
+            'message': 'Login successful',
+            'user': {
+                'id': authenticated_user.id,
+                'email': authenticated_user.email,
+                'first_name': authenticated_user.first_name,
+                'last_name': authenticated_user.last_name,
+            }
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def logout(request):
+    """User logout endpoint"""
+    # For stateless authentication, logout is mainly client-side
+    # This endpoint can be used for server-side session cleanup if needed
+    # or for logging logout events
+    
+    # If using token-based auth, you could invalidate the token here
+    # For now, we'll just return success
+    
+    return Response({
+        'message': 'Logged out successfully'
+    }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
 def verify_email(request):
     """Email verification endpoint"""
     serializer = EmailVerificationSerializer(data=request.data)
@@ -93,9 +186,9 @@ def verify_email(request):
                 'error': 'Invalid verification code.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Activate user
+        # Activate user (get the most recent user with this email if duplicates exist)
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.filter(email=email).latest('id')
             user.is_active = True
             user.save()
             
@@ -124,7 +217,8 @@ def resend_verification_code(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        user = User.objects.get(email=email)
+        # Get the most recent user with this email if duplicates exist
+        user = User.objects.filter(email=email).latest('id')
         if user.is_active:
             return Response({
                 'error': 'Email already verified.'
@@ -198,9 +292,9 @@ def google_oauth(request):
                 'error': 'Email not provided by Google.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if user exists
+        # Check if user exists (get the most recent user with this email if duplicates exist)
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.filter(email=email).latest('id')
             # Update user info if needed
             if not user.first_name:
                 user.first_name = first_name

@@ -19,6 +19,14 @@ class SignUpSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs['confirm_password']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         
+        # Check if email already exists
+        email = attrs['email']
+        existing_user = User.objects.filter(email=email).first()
+        if existing_user:
+            if existing_user.is_active:
+                raise serializers.ValidationError({"email": "An account with this email already exists. Please sign in instead."})
+            # If user exists but not verified, we'll handle it in the view to resend code
+        
         # Check password strength
         password = attrs['password']
         if len(password) < 8:
@@ -64,4 +72,8 @@ class SignUpSerializer(serializers.ModelSerializer):
 class EmailVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     code = serializers.CharField(required=True, max_length=6)
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True, write_only=True, style={'input_type': 'password'})
 
