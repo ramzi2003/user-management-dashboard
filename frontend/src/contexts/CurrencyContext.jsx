@@ -57,11 +57,18 @@ export function CurrencyProvider({ children }) {
     }));
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount, assumeUSD = true) => {
     const currencyInfo = CURRENCIES[currency];
-    // Use buy rate for converting from USD to other currencies
-    const exchangeRate = exchangeRates[currency].buy;
-    const convertedAmount = amount * exchangeRate;
+    
+    let convertedAmount;
+    if (assumeUSD) {
+      // Use buy rate for converting from USD to other currencies
+      const exchangeRate = exchangeRates[currency].buy;
+      convertedAmount = amount * exchangeRate;
+    } else {
+      // Amount is already in the selected currency, no conversion needed
+      convertedAmount = amount;
+    }
     
     const formatted = convertedAmount.toLocaleString(currencyInfo.locale, { 
       minimumFractionDigits: 2, 

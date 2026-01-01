@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useCurrency } from '../contexts/CurrencyContext';
 
 export default function SalarySection({ darkMode }) {
-  const { formatCurrency, convertBetweenCurrencies, currencies } = useCurrency();
+  const { formatCurrency, convertBetweenCurrencies, currencies, currency: selectedCurrency } = useCurrency();
   const [incomes, setIncomes] = useState(() => {
     const saved = localStorage.getItem('salary_incomes');
     const parsed = saved ? JSON.parse(saved) : [];
@@ -68,8 +68,7 @@ export default function SalarySection({ darkMode }) {
       if (lastProcessedMonth === null || lastProcessedYear === null) {
         localStorage.setItem('last_processed_month', currentMonth.toString());
         localStorage.setItem('last_processed_year', currentYear.toString());
-        lastProcessedMonth = currentMonth.toString();
-        lastProcessedYear = currentYear.toString();
+        return; // Don't process anything on first run
       }
       
       // Get the last day of the current month
@@ -79,15 +78,19 @@ export default function SalarySection({ darkMode }) {
       const isEndOfMonth = currentDay === lastDayOfMonth && currentHour === 23 && currentMinute >= 59;
       
       // Check if we're in a new month that hasn't been processed yet
-      const isNewMonth = lastProcessedMonth === null || 
-                         lastProcessedYear === null ||
-                         parseInt(lastProcessedMonth) !== currentMonth ||
-                         parseInt(lastProcessedYear) !== currentYear;
+      const isNewMonth = parseInt(lastProcessedMonth) !== currentMonth || parseInt(lastProcessedYear) !== currentYear;
       
       // If we're in a new month, first save the previous month's snapshot (if not already saved)
-      if (isNewMonth && lastProcessedMonth !== null && lastProcessedYear !== null) {
+      if (isNewMonth) {
         const prevMonth = parseInt(lastProcessedMonth);
         const prevYear = parseInt(lastProcessedYear);
+        
+        // Get current data from localStorage (to avoid stale state)
+        const currentIncomes = JSON.parse(localStorage.getItem('salary_incomes') || '[]');
+        const currentExpenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
+        const currentDebts = JSON.parse(localStorage.getItem('salary_debts') || '[]');
+        const currentLoans = JSON.parse(localStorage.getItem('salary_loans') || '[]');
+        const currentSavings = parseFloat(localStorage.getItem('salary_savings') || '0');
         
         // Check if previous month was already saved
         const existingHistory = localStorage.getItem('monthly_history');
@@ -95,47 +98,56 @@ export default function SalarySection({ darkMode }) {
         const prevMonthSaved = history.some(snapshot => snapshot.month === prevMonth && snapshot.year === prevYear);
         
         // If previous month wasn't saved, save it now
-        if (!prevMonthSaved && incomes.length > 0 || expenses.length > 0) {
+        if (!prevMonthSaved && (currentIncomes.length > 0 || currentExpenses.length > 0)) {
+          // Calculate totals for previous month
+          const prevMonthlyIncome = currentIncomes
+            .filter(inc => {
+              const date = new Date(inc.date);
+              return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
+            })
+            .reduce((sum, inc) => {
+              const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
+              return sum + amountInUSD;
+            }, 0);
+          
+          const prevTotalExpenses = currentExpenses
+            .filter(exp => {
+              const date = new Date(exp.date);
+              return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
+            })
+            .reduce((sum, exp) => {
+              const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
+              return sum + amountInUSD;
+            }, 0) + currentSavings;
+          
+          const prevTotalDebts = currentDebts
+            .filter(debt => !debt.returned)
+            .reduce((sum, debt) => {
+              const amountInUSD = convertBetweenCurrencies(parseFloat(debt.amount || 0), debt.currency || 'USD', 'USD');
+              return sum + amountInUSD;
+            }, 0);
+          
+          const prevTotalLoans = currentLoans
+            .filter(loan => !loan.returned)
+            .reduce((sum, loan) => {
+              const amountInUSD = convertBetweenCurrencies(parseFloat(loan.amount || 0), loan.currency || 'USD', 'USD');
+              return sum + amountInUSD;
+            }, 0);
+          
           const monthSnapshot = {
             year: prevYear,
             month: prevMonth,
             monthName: new Date(prevYear, prevMonth).toLocaleString('default', { month: 'long' }),
             timestamp: new Date(prevYear, prevMonth + 1, 0, 23, 59, 59).toISOString(),
-            incomes: [...incomes],
-            expenses: [...expenses],
-            debts: [...debts],
-            loans: [...loans],
-            savings: savings,
-            monthlyIncome: incomes
-              .filter(inc => {
-                const date = new Date(inc.date);
-                return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
-              })
-              .reduce((sum, inc) => {
-                const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
-                return sum + amountInUSD;
-              }, 0),
-            totalExpenses: expenses
-              .filter(exp => {
-                const date = new Date(exp.date);
-                return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
-              })
-              .reduce((sum, exp) => {
-                const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
-                return sum + amountInUSD;
-              }, 0) + savings,
-            totalDebts: debts
-              .filter(debt => !debt.returned)
-              .reduce((sum, debt) => {
-                const amountInUSD = convertBetweenCurrencies(parseFloat(debt.amount || 0), debt.currency || 'USD', 'USD');
-                return sum + amountInUSD;
-              }, 0),
-            totalLoans: loans
-              .filter(loan => !loan.returned)
-              .reduce((sum, loan) => {
-                const amountInUSD = convertBetweenCurrencies(parseFloat(loan.amount || 0), loan.currency || 'USD', 'USD');
-                return sum + amountInUSD;
-              }, 0),
+            incomes: currentIncomes,
+            expenses: currentExpenses,
+            debts: currentDebts,
+            loans: currentLoans,
+            savings: currentSavings,
+            monthlyIncome: prevMonthlyIncome,
+            totalExpenses: prevTotalExpenses,
+            totalDebts: prevTotalDebts,
+            totalLoans: prevTotalLoans,
           };
           
           history.push(monthSnapshot);
@@ -149,25 +161,43 @@ export default function SalarySection({ darkMode }) {
         }
         
         // Clear income and expenses for the new month (keep savings, unreturned debts/loans)
-        setIncomes([]);
-        setExpenses([]);
-        localStorage.setItem('salary_incomes', JSON.stringify([]));
-        localStorage.setItem('salary_expenses', JSON.stringify([]));
+        // Only clear if we haven't already cleared (check if arrays are empty)
+        const savedIncomes = JSON.parse(localStorage.getItem('salary_incomes') || '[]');
+        const savedExpenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
+        
+        // Only clear if there's data to clear (avoid clearing repeatedly)
+        if (savedIncomes.length > 0 || savedExpenses.length > 0) {
+          setIncomes([]);
+          setExpenses([]);
+          localStorage.setItem('salary_incomes', JSON.stringify([]));
+          localStorage.setItem('salary_expenses', JSON.stringify([]));
+        }
+        
+        // Mark this month as processed immediately to prevent repeated clearing
+        localStorage.setItem('last_processed_month', currentMonth.toString());
+        localStorage.setItem('last_processed_year', currentYear.toString());
       }
       
       // If it's the end of the current month, save snapshot
-      if (isEndOfMonth && (!lastProcessedMonth || parseInt(lastProcessedMonth) !== currentMonth || parseInt(lastProcessedYear) !== currentYear)) {
+      if (isEndOfMonth) {
+        // Get current data from localStorage
+        const currentIncomes = JSON.parse(localStorage.getItem('salary_incomes') || '[]');
+        const currentExpenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
+        const currentDebts = JSON.parse(localStorage.getItem('salary_debts') || '[]');
+        const currentLoans = JSON.parse(localStorage.getItem('salary_loans') || '[]');
+        const currentSavings = parseFloat(localStorage.getItem('salary_savings') || '0');
+        
         const monthSnapshot = {
           year: currentYear,
           month: currentMonth,
           monthName: now.toLocaleString('default', { month: 'long' }),
           timestamp: now.toISOString(),
-          incomes: [...incomes],
-          expenses: [...expenses],
-          debts: [...debts],
-          loans: [...loans],
-          savings: savings,
-          monthlyIncome: incomes
+          incomes: currentIncomes,
+          expenses: currentExpenses,
+          debts: currentDebts,
+          loans: currentLoans,
+          savings: currentSavings,
+          monthlyIncome: currentIncomes
             .filter(inc => {
               const date = new Date(inc.date);
               return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
@@ -176,7 +206,7 @@ export default function SalarySection({ darkMode }) {
               const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
               return sum + amountInUSD;
             }, 0),
-          totalExpenses: expenses
+          totalExpenses: currentExpenses
             .filter(exp => {
               const date = new Date(exp.date);
               return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
@@ -184,14 +214,14 @@ export default function SalarySection({ darkMode }) {
             .reduce((sum, exp) => {
               const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
               return sum + amountInUSD;
-            }, 0) + savings,
-          totalDebts: debts
+            }, 0) + currentSavings,
+          totalDebts: currentDebts
             .filter(debt => !debt.returned)
             .reduce((sum, debt) => {
               const amountInUSD = convertBetweenCurrencies(parseFloat(debt.amount || 0), debt.currency || 'USD', 'USD');
               return sum + amountInUSD;
             }, 0),
-          totalLoans: loans
+          totalLoans: currentLoans
             .filter(loan => !loan.returned)
             .reduce((sum, loan) => {
               const amountInUSD = convertBetweenCurrencies(parseFloat(loan.amount || 0), loan.currency || 'USD', 'USD');
@@ -203,16 +233,20 @@ export default function SalarySection({ darkMode }) {
         const existingHistory = localStorage.getItem('monthly_history');
         const history = existingHistory ? JSON.parse(existingHistory) : [];
         
-        // Add new snapshot
-        history.push(monthSnapshot);
-        
-        // Keep only last 12 months
-        if (history.length > 12) {
-          history.shift();
+        // Check if this month is already saved
+        const alreadySaved = history.some(snapshot => snapshot.month === currentMonth && snapshot.year === currentYear);
+        if (!alreadySaved) {
+          // Add new snapshot
+          history.push(monthSnapshot);
+          
+          // Keep only last 12 months
+          if (history.length > 12) {
+            history.shift();
+          }
+          
+          // Save history
+          localStorage.setItem('monthly_history', JSON.stringify(history));
         }
-        
-        // Save history
-        localStorage.setItem('monthly_history', JSON.stringify(history));
         
         // Mark this month as processed
         localStorage.setItem('last_processed_month', currentMonth.toString());
@@ -220,68 +254,115 @@ export default function SalarySection({ darkMode }) {
       }
     };
     
-    // Check immediately
+    // Check immediately on mount
     checkMonthlyRollover();
     
     // Check every minute
     const interval = setInterval(checkMonthlyRollover, 60000);
     
     return () => clearInterval(interval);
-  }, [incomes, expenses, debts, loans, savings, convertBetweenCurrencies]);
+  }, [convertBetweenCurrencies]); // Only depend on convertBetweenCurrencies, not on state values
+
+  // Helper function to calculate total efficiently
+  // Returns { amount: number in selected currency, isDirectSum: boolean }
+  const calculateTotal = (items, filterFn = () => true) => {
+    const filtered = items.filter(filterFn);
+    if (filtered.length === 0) return { amount: 0, isDirectSum: false };
+    
+    // Check if all items are in the same currency
+    const currencies = [...new Set(filtered.map(item => item.currency || 'USD'))];
+    const allSameCurrency = currencies.length === 1;
+    
+    // If all items are in the selected currency, sum directly
+    if (allSameCurrency && currencies[0] === selectedCurrency) {
+      const total = filtered.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+      return { amount: total, isDirectSum: true };
+    }
+    
+    // Otherwise, convert to USD first, then to selected currency
+    const totalInUSD = filtered.reduce((sum, item) => {
+      const amountInUSD = convertBetweenCurrencies(parseFloat(item.amount || 0), item.currency || 'USD', 'USD');
+      return sum + amountInUSD;
+    }, 0);
+    
+    // Convert from USD to selected currency
+    const totalInSelected = convertBetweenCurrencies(totalInUSD, 'USD', selectedCurrency);
+    return { amount: totalInSelected, isDirectSum: false };
+  };
 
   // Calculate totals
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   
-  // Convert all amounts to USD for calculations
-  const monthlyIncome = incomes
-    .filter(inc => {
-      const date = new Date(inc.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    })
-    .reduce((sum, inc) => {
-      const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
-      return sum + amountInUSD;
-    }, 0);
+  // Calculate monthly income
+  const monthlyIncomeResult = calculateTotal(incomes, (inc) => {
+    const date = new Date(inc.date);
+    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+  });
+  const monthlyIncome = monthlyIncomeResult.amount;
+  const monthlyIncomeIsDirect = monthlyIncomeResult.isDirectSum;
 
-  const yearlyIncome = incomes
-    .filter(inc => new Date(inc.date).getFullYear() === currentYear)
-    .reduce((sum, inc) => {
-      const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
-      return sum + amountInUSD;
-    }, 0);
+  // Calculate yearly income
+  const yearlyIncomeResult = calculateTotal(incomes, (inc) => {
+    return new Date(inc.date).getFullYear() === currentYear;
+  });
+  const yearlyIncome = yearlyIncomeResult.amount;
+  const yearlyIncomeIsDirect = yearlyIncomeResult.isDirectSum;
 
-  const totalExpenses = expenses
-    .filter(exp => {
-      const date = new Date(exp.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    })
-    .reduce((sum, exp) => {
-      const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
-      return sum + amountInUSD;
-    }, 0) + savings;
+  // Calculate total expenses
+  const totalExpensesResult = calculateTotal(expenses, (exp) => {
+    const date = new Date(exp.date);
+    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+  });
+  // Add savings (convert to selected currency if needed)
+  // Savings is stored in USD, convert to selected currency
+  const savingsInSelected = convertBetweenCurrencies(savings, 'USD', selectedCurrency);
+  const totalExpenses = totalExpensesResult.amount + savingsInSelected;
+  // Expenses are mixed if savings is added (savings is always in USD)
+  const totalExpensesIsDirect = totalExpensesResult.isDirectSum && savings === 0;
 
-  // Only count non-returned debts and loans
+  // Helper function to get date from debt/loan (use date field if exists, otherwise infer from id)
+  const getDebtLoanDate = (item) => {
+    if (item.date) {
+      return new Date(item.date);
+    }
+    // For backward compatibility: use id timestamp to infer date
+    // id is Date.now(), so convert to date
+    return new Date(item.id);
+  };
+
+  // Calculate total debts and loans for display (all non-returned)
+  const allDebtsResult = calculateTotal(debts.filter(debt => !debt.returned));
+  const allDebts = allDebtsResult.amount;
+  const allDebtsIsDirect = allDebtsResult.isDirectSum;
+  
+  const allLoansResult = calculateTotal(loans.filter(loan => !loan.returned));
+  const allLoans = allLoansResult.amount;
+  const allLoansIsDirect = allLoansResult.isDirectSum;
+
+  // Only count non-returned debts and loans from current month for Available Money calculation
   // Debts: money you owe (you have this money, so it adds to available money)
-  const totalDebts = debts
-    .filter(debt => !debt.returned)
-    .reduce((sum, debt) => {
-      const amountInUSD = convertBetweenCurrencies(parseFloat(debt.amount || 0), debt.currency || 'USD', 'USD');
-      return sum + amountInUSD;
-    }, 0);
+  const currentMonthDebts = debts.filter(debt => {
+    if (debt.returned) return false;
+    const debtDate = getDebtLoanDate(debt);
+    return debtDate.getMonth() === currentMonth && debtDate.getFullYear() === currentYear;
+  });
+  const currentMonthDebtsResult = calculateTotal(currentMonthDebts);
+  const currentMonthDebtsTotal = currentMonthDebtsResult.amount;
   
   // Loans: money you lent (you don't have this money, so it subtracts from available money)
-  // Only count non-returned loans - when returned, you get the money back (so it's not subtracted)
-  const totalLoans = loans
-    .filter(loan => !loan.returned)
-    .reduce((sum, loan) => {
-      const amountInUSD = convertBetweenCurrencies(parseFloat(loan.amount || 0), loan.currency || 'USD', 'USD');
-      return sum + amountInUSD;
-    }, 0);
+  // Only count non-returned loans from current month - when returned, you get the money back (so it's not subtracted)
+  const currentMonthLoans = loans.filter(loan => {
+    if (loan.returned) return false;
+    const loanDate = getDebtLoanDate(loan);
+    return loanDate.getMonth() === currentMonth && loanDate.getFullYear() === currentYear;
+  });
+  const currentMonthLoansResult = calculateTotal(currentMonthLoans);
+  const currentMonthLoansTotal = currentMonthLoansResult.amount;
   
-  // Available Money = Income - Expenses + Debts (you have) - Loans (you lent, not returned)
+  // Available Money = Income - Expenses + Debts (you have, from current month) - Loans (you lent, not returned, from current month)
   // When a loan is returned, it's simply not subtracted anymore (you have it back)
-  const netSavings = monthlyIncome - totalExpenses + totalDebts - totalLoans;
+  const netSavings = monthlyIncome - totalExpenses + currentMonthDebtsTotal - currentMonthLoansTotal;
 
   // Save to localStorage
   const saveIncomes = (newIncomes) => {
@@ -317,12 +398,12 @@ export default function SalarySection({ darkMode }) {
       <div className="grid md:grid-cols-5 gap-6">
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>Monthly Income</p>
-          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(monthlyIncome).display}</p>
+          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(monthlyIncome, !monthlyIncomeIsDirect).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>This month</p>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>YTD Income</p>
-          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(yearlyIncome).display}</p>
+          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(yearlyIncome, !yearlyIncomeIsDirect).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>Year to date</p>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
@@ -332,12 +413,12 @@ export default function SalarySection({ darkMode }) {
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>Available Money</p>
-          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(netSavings).display}</p>
+          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(netSavings, false).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>Current balance</p>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>Monthly Expenses</p>
-          <p className="text-3xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalExpenses).display}</p>
+          <p className="text-3xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalExpenses, false).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>This month</p>
         </div>
       </div>
@@ -347,13 +428,13 @@ export default function SalarySection({ darkMode }) {
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <div className="flex justify-between items-center mb-4">
             <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm`}>Total Debts (Owed)</p>
-            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalDebts).display}</p>
+            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(allDebts, !allDebtsIsDirect).display}</p>
           </div>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <div className="flex justify-between items-center mb-4">
             <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm`}>Total Loans (Lent)</p>
-            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalLoans).display}</p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(allLoans, !allLoansIsDirect).display}</p>
           </div>
         </div>
       </div>
@@ -921,7 +1002,8 @@ function DebtManager({ debts, onSave, showForm, setShowForm, darkMode }) {
       person,
       amount: parseFloat(amount),
       description: description || 'No description',
-      currency: debtCurrency
+      currency: debtCurrency,
+      date: new Date().toISOString().split('T')[0]
     };
     onSave([...debts, newDebt]);
     setPerson('');
@@ -1153,7 +1235,8 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
       person,
       amount: parseFloat(amount),
       description: description || 'No description',
-      currency: loanCurrency
+      currency: loanCurrency,
+      date: new Date().toISOString().split('T')[0]
     };
     onSave([...loans, newLoan]);
     setPerson('');

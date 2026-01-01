@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import {
   DollarSign,
   Heart,
@@ -19,6 +19,13 @@ import { useDarkMode } from '../contexts/DarkModeContext';
 function LandingPage() {
   const navigate = useNavigate();
   const { darkMode, toggleDarkMode } = useDarkMode();
+
+  // If authenticated (has token), redirect to dashboard
+  const token = localStorage.getItem('token');
+  const user = localStorage.getItem('user');
+  if (token || user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const features = [
     {
