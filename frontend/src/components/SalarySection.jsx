@@ -340,29 +340,43 @@ export default function SalarySection({ darkMode }) {
   const allLoans = allLoansResult.amount;
   const allLoansIsDirect = allLoansResult.isDirectSum;
 
-  // Only count non-returned debts and loans from current month for Available Money calculation
-  // Debts: money you owe (you have this money, so it adds to available money)
-  const currentMonthDebts = debts.filter(debt => {
-    if (debt.returned) return false;
+  // Helper function to check if returned in current month
+  const isReturnedInCurrentMonth = (item) => {
+    if (!item.returned || !item.returnedDate) return false;
+    const returnedDate = new Date(item.returnedDate);
+    return returnedDate.getMonth() === currentMonth && returnedDate.getFullYear() === currentYear;
+  };
+
+  // For Available Money calculation:
+  // - Debts from previous months that are NOT returned: Don't count (already accounted for in previous month)
+  // - Debts from current month that are NOT returned: ADD (you have this money)
+  // - Debts returned in current month: SUBTRACT (they paid it back, so you no longer have it)
+  const nonReturnedDebts = debts.filter(debt => {
     const debtDate = getDebtLoanDate(debt);
-    return debtDate.getMonth() === currentMonth && debtDate.getFullYear() === currentYear;
+    const isFromCurrentMonth = debtDate.getMonth() === currentMonth && debtDate.getFullYear() === currentYear;
+    return isFromCurrentMonth && !debt.returned;
   });
-  const currentMonthDebtsResult = calculateTotal(currentMonthDebts);
-  const currentMonthDebtsTotal = currentMonthDebtsResult.amount;
+  const returnedDebts = debts.filter(debt => isReturnedInCurrentMonth(debt));
+  
+  const nonReturnedDebtsResult = calculateTotal(nonReturnedDebts);
+  const returnedDebtsResult = calculateTotal(returnedDebts);
   
   // Loans: money you lent (you don't have this money, so it subtracts from available money)
-  // Only count non-returned loans from current month - when returned, you get the money back (so it's not subtracted)
-  const currentMonthLoans = loans.filter(loan => {
-    if (loan.returned) return false;
+  // - Loans from previous months that are NOT returned: Don't count (already accounted for in previous month)
+  // - Loans from current month that are NOT returned: SUBTRACT (you don't have this money)
+  // - Loans returned in current month: ADD (you got the money back)
+  const nonReturnedLoans = loans.filter(loan => {
     const loanDate = getDebtLoanDate(loan);
-    return loanDate.getMonth() === currentMonth && loanDate.getFullYear() === currentYear;
+    const isFromCurrentMonth = loanDate.getMonth() === currentMonth && loanDate.getFullYear() === currentYear;
+    return isFromCurrentMonth && !loan.returned;
   });
-  const currentMonthLoansResult = calculateTotal(currentMonthLoans);
-  const currentMonthLoansTotal = currentMonthLoansResult.amount;
+  const returnedLoans = loans.filter(loan => isReturnedInCurrentMonth(loan));
   
-  // Available Money = Income - Expenses + Debts (you have, from current month) - Loans (you lent, not returned, from current month)
-  // When a loan is returned, it's simply not subtracted anymore (you have it back)
-  const netSavings = monthlyIncome - totalExpenses + currentMonthDebtsTotal - currentMonthLoansTotal;
+  const nonReturnedLoansResult = calculateTotal(nonReturnedLoans);
+  const returnedLoansResult = calculateTotal(returnedLoans);
+  
+  // Available Money = Income - Expenses + Debts (current month, not returned) - Debts (returned this month) - Loans (current month, not returned) + Loans (returned this month)
+  const netSavings = monthlyIncome - totalExpenses + nonReturnedDebtsResult.amount - returnedDebtsResult.amount - nonReturnedLoansResult.amount + returnedLoansResult.amount;
 
   // Save to localStorage
   const saveIncomes = (newIncomes) => {
@@ -460,7 +474,9 @@ export default function SalarySection({ darkMode }) {
       {/* Debts Section */}
       <DebtManager 
         debts={debts} 
-        onSave={saveDebts} 
+        onSave={saveDebts}
+        expenses={expenses}
+        onSaveExpenses={saveExpenses}
         showForm={showDebtForm} 
         setShowForm={setShowDebtForm}
         darkMode={darkMode} 
@@ -983,12 +999,13 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
   );
 }
 
-function DebtManager({ debts, onSave, showForm, setShowForm, darkMode }) {
+function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setShowForm, darkMode }) {
   const { currencies } = useCurrency();
   const [person, setPerson] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [debtCurrency, setDebtCurrency] = useState('USD');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllDebts, setShowAllDebts] = useState(false);
   
   const DISPLAY_LIMIT = 4;
@@ -1003,13 +1020,14 @@ function DebtManager({ debts, onSave, showForm, setShowForm, darkMode }) {
       amount: parseFloat(amount),
       description: description || 'No description',
       currency: debtCurrency,
-      date: new Date().toISOString().split('T')[0]
+      date: date
     };
     onSave([...debts, newDebt]);
     setPerson('');
     setAmount('');
     setDescription('');
     setDebtCurrency('USD');
+    setDate(new Date().toISOString().split('T')[0]);
     setShowForm(false);
   };
 
@@ -1018,9 +1036,35 @@ function DebtManager({ debts, onSave, showForm, setShowForm, darkMode }) {
   };
 
   const handleToggleReturned = (id) => {
-    onSave(debts.map(debt => 
-      debt.id === id ? { ...debt, returned: !(debt.returned || false) } : debt
-    ));
+    const debtToUpdate = debts.find(debt => debt.id === id);
+    if (!debtToUpdate) return;
+
+    const isCurrentlyReturned = debtToUpdate.returned || false;
+    const returnDate = new Date().toISOString().split('T')[0];
+
+    // Update the debt
+    onSave(debts.map(debt => {
+      if (debt.id === id) {
+        return {
+          ...debt,
+          returned: !isCurrentlyReturned,
+          returnedDate: !isCurrentlyReturned ? returnDate : null
+        };
+      }
+      return debt;
+    }));
+
+    // If marking as returned (not un-returning), add an expense
+    if (!isCurrentlyReturned) {
+      const newExpense = {
+        id: Date.now(),
+        description: `Returned debt - ${debtToUpdate.person}`,
+        amount: debtToUpdate.amount,
+        date: returnDate,
+        currency: debtToUpdate.currency || 'USD'
+      };
+      onSaveExpenses([...expenses, newExpense]);
+    }
   };
 
   return (
@@ -1064,6 +1108,13 @@ function DebtManager({ debts, onSave, showForm, setShowForm, darkMode }) {
               <option key={curr.code} value={curr.code}>{curr.name} ({curr.code})</option>
             ))}
           </select>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-red-500`}
+            required
+          />
           <input
             type="text"
             placeholder="Description (optional)"
@@ -1222,6 +1273,7 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [loanCurrency, setLoanCurrency] = useState('USD');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllLoans, setShowAllLoans] = useState(false);
   
   const DISPLAY_LIMIT = 4;
@@ -1236,13 +1288,14 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
       amount: parseFloat(amount),
       description: description || 'No description',
       currency: loanCurrency,
-      date: new Date().toISOString().split('T')[0]
+      date: date
     };
     onSave([...loans, newLoan]);
     setPerson('');
     setAmount('');
     setDescription('');
     setLoanCurrency('USD');
+    setDate(new Date().toISOString().split('T')[0]);
     setShowForm(false);
   };
 
@@ -1251,9 +1304,17 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
   };
 
   const handleToggleReturned = (id) => {
-    onSave(loans.map(loan => 
-      loan.id === id ? { ...loan, returned: !(loan.returned || false) } : loan
-    ));
+    onSave(loans.map(loan => {
+      if (loan.id === id) {
+        const isCurrentlyReturned = loan.returned || false;
+        return {
+          ...loan,
+          returned: !isCurrentlyReturned,
+          returnedDate: !isCurrentlyReturned ? new Date().toISOString().split('T')[0] : null
+        };
+      }
+      return loan;
+    }));
   };
 
   return (
@@ -1297,6 +1358,13 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
               <option key={curr.code} value={curr.code}>{curr.name} ({curr.code})</option>
             ))}
           </select>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-amber-500`}
+            required
+          />
           <input
             type="text"
             placeholder="Description (optional)"
