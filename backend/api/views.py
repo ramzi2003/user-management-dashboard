@@ -1,7 +1,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import SignUpSerializer, EmailVerificationSerializer, LoginSerializer
+from .serializers import SignUpSerializer, EmailVerificationSerializer, LoginSerializer, LakawonClassSerializer, LakawonDeductionSerializer
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.core.mail import send_mail
@@ -11,6 +11,10 @@ import string
 from django.core.cache import cache
 import requests
 import json
+from .models import LakawonClass, LakawonDeduction
+from datetime import datetime, date, timedelta
+from django.utils import timezone
+from django.db import IntegrityError
 
 @api_view(['GET'])
 def health_check(request):
@@ -344,3 +348,502 @@ def google_oauth(request):
             'error': 'An error occurred during authentication.',
             'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Lakawon API Views
+@api_view(['GET'])
+def lakawon_classes(request):
+    """Get all Lakawon classes for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get optional filter parameters
+    month = request.GET.get('month')  # Format: YYYY-MM
+    year = request.GET.get('year')    # Format: YYYY
+    
+    classes = LakawonClass.objects.filter(user=user)
+    
+    if month:
+        try:
+            year_val, month_val = map(int, month.split('-'))
+            classes = classes.filter(date__year=year_val, date__month=month_val)
+        except (ValueError, AttributeError):
+            return Response({
+                'error': 'Invalid month format. Use YYYY-MM.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    elif year:
+        try:
+            year_val = int(year)
+            classes = classes.filter(date__year=year_val)
+        except ValueError:
+            return Response({
+                'error': 'Invalid year format. Use YYYY.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    serializer = LakawonClassSerializer(classes, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+def lakawon_class_create(request):
+    """Create a new Lakawon class"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Create serializer with user
+    serializer = LakawonClassSerializer(data=request.data)
+    if serializer.is_valid():
+        try:
+            # Save with user
+            class_obj = serializer.save(user=user)
+            return Response(LakawonClassSerializer(class_obj).data, status=status.HTTP_201_CREATED)
+        except IntegrityError:
+            return Response({
+                'error': 'A class already exists at this date and time.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PUT', 'PATCH'])
+def lakawon_class_update(request, class_id):
+    """Update a Lakawon class"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        class_obj = LakawonClass.objects.get(id=class_id, user=user)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except LakawonClass.DoesNotExist:
+        return Response({
+            'error': 'Class not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = LakawonClassSerializer(class_obj, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['DELETE'])
+def lakawon_class_delete(request, class_id):
+    """Delete a Lakawon class and associated deduction if cancelled"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        class_obj = LakawonClass.objects.get(id=class_id, user=user)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except LakawonClass.DoesNotExist:
+        return Response({
+            'error': 'Class not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # If the class is cancelled, delete the associated deduction
+    if class_obj.cancelled:
+        try:
+            deduction = LakawonDeduction.objects.get(
+                user=user,
+                date=class_obj.date,
+                time=class_obj.time
+            )
+            deduction.delete()
+        except LakawonDeduction.DoesNotExist:
+            # Deduction might not exist, which is okay
+            pass
+        except LakawonDeduction.MultipleObjectsReturned:
+            # If multiple deductions exist for the same date/time, delete all of them
+            LakawonDeduction.objects.filter(
+                user=user,
+                date=class_obj.date,
+                time=class_obj.time
+            ).delete()
+    
+    class_obj.delete()
+    return Response({
+        'message': 'Class deleted successfully.'
+    }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def lakawon_salary_summary(request):
+    """Get salary summary for the two payment periods"""
+    user_id = request.GET.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get optional year and month parameters
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+    
+    if year:
+        try:
+            year_val = int(year)
+        except ValueError:
+            return Response({
+                'error': 'Invalid year format. Use YYYY.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        year_val = timezone.now().year
+    
+    if month:
+        try:
+            month_val = int(month)
+        except ValueError:
+            return Response({
+                'error': 'Invalid month format. Use 1-12.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        month_val = timezone.now().month
+    
+    # Get current date to determine periods
+    today = timezone.now().date()
+    
+    # Period 1: 1st to 15th (paid on 18th)
+    period1_start = date(year_val, month_val, 1)
+    period1_end = date(year_val, month_val, 15)
+    
+    # Period 2: 16th to end of month (paid on 3rd of next month)
+    period2_start = date(year_val, month_val, 16)
+    # Calculate last day of month
+    if month_val == 12:
+        period2_end = date(year_val + 1, 1, 1) - timedelta(days=1)
+    else:
+        period2_end = date(year_val, month_val + 1, 1) - timedelta(days=1)
+    
+    # Get classes for period 1 (exclude cancelled classes)
+    period1_classes = LakawonClass.objects.filter(
+        user=user,
+        date__gte=period1_start,
+        date__lte=period1_end,
+        cancelled=False
+    )
+    
+    # Get classes for period 2 (exclude cancelled classes)
+    period2_classes = LakawonClass.objects.filter(
+        user=user,
+        date__gte=period2_start,
+        date__lte=period2_end,
+        cancelled=False
+    )
+    
+    # Get deductions for period 1
+    period1_deductions = LakawonDeduction.objects.filter(
+        user=user,
+        date__gte=period1_start,
+        date__lte=period1_end
+    )
+    period1_deduction_total = sum(deduction.amount for deduction in period1_deductions)
+    period1_deduction_count = period1_deductions.count()
+    
+    # Get deductions for period 2
+    period2_deductions = LakawonDeduction.objects.filter(
+        user=user,
+        date__gte=period2_start,
+        date__lte=period2_end
+    )
+    period2_deduction_total = sum(deduction.amount for deduction in period2_deductions)
+    period2_deduction_count = period2_deductions.count()
+    
+    # Calculate totals for period 1
+    period1_class_total = sum(class_obj.amount for class_obj in period1_classes)
+    period1_regular = sum(class_obj.amount for class_obj in period1_classes if class_obj.class_type == 'regular')
+    period1_demo = sum(class_obj.amount for class_obj in period1_classes if class_obj.class_type == 'demo')
+    period1_regular_count = period1_classes.filter(class_type='regular').count()
+    period1_demo_count = period1_classes.filter(class_type='demo').count()
+    # Subtract deductions from total
+    period1_total = period1_class_total - period1_deduction_total
+    
+    # Calculate totals for period 2
+    period2_class_total = sum(class_obj.amount for class_obj in period2_classes)
+    period2_regular = sum(class_obj.amount for class_obj in period2_classes if class_obj.class_type == 'regular')
+    period2_demo = sum(class_obj.amount for class_obj in period2_classes if class_obj.class_type == 'demo')
+    period2_regular_count = period2_classes.filter(class_type='regular').count()
+    period2_demo_count = period2_classes.filter(class_type='demo').count()
+    # Subtract deductions from total
+    period2_total = period2_class_total - period2_deduction_total
+    
+    # Payment dates
+    period1_payment_date = date(year_val, month_val, 18)
+    if month_val == 12:
+        period2_payment_date = date(year_val + 1, 1, 3)
+    else:
+        period2_payment_date = date(year_val, month_val + 1, 3)
+    
+    return Response({
+        'period1': {
+            'start_date': period1_start.isoformat(),
+            'end_date': period1_end.isoformat(),
+            'payment_date': period1_payment_date.isoformat(),
+            'total': float(period1_total),
+            'regular_total': float(period1_regular),
+            'demo_total': float(period1_demo),
+            'regular_count': period1_regular_count,
+            'demo_count': period1_demo_count,
+            'total_count': period1_regular_count + period1_demo_count,
+            'deduction_total': float(period1_deduction_total),
+            'deduction_count': period1_deduction_count,
+        },
+        'period2': {
+            'start_date': period2_start.isoformat(),
+            'end_date': period2_end.isoformat(),
+            'payment_date': period2_payment_date.isoformat(),
+            'total': float(period2_total),
+            'regular_total': float(period2_regular),
+            'demo_total': float(period2_demo),
+            'regular_count': period2_regular_count,
+            'demo_count': period2_demo_count,
+            'total_count': period2_regular_count + period2_demo_count,
+            'deduction_total': float(period2_deduction_total),
+            'deduction_count': period2_deduction_count,
+        },
+        'year': year_val,
+        'month': month_val,
+    }, status=status.HTTP_200_OK)
+
+
+# Deduction API Views
+@api_view(['GET'])
+def lakawon_deductions(request):
+    """Get all Lakawon deductions for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get optional filter parameters
+    month = request.GET.get('month')  # Format: YYYY-MM
+    year = request.GET.get('year')    # Format: YYYY
+    
+    deductions = LakawonDeduction.objects.filter(user=user)
+    
+    if month:
+        try:
+            year_val, month_val = map(int, month.split('-'))
+            deductions = deductions.filter(date__year=year_val, date__month=month_val)
+        except (ValueError, AttributeError):
+            return Response({
+                'error': 'Invalid month format. Use YYYY-MM.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    elif year:
+        try:
+            year_val = int(year)
+            deductions = deductions.filter(date__year=year_val)
+        except ValueError:
+            return Response({
+                'error': 'Invalid year format. Use YYYY.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    serializer = LakawonDeductionSerializer(deductions, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def lakawon_deduction_create(request):
+    """Create a new Lakawon deduction"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = LakawonDeductionSerializer(data=request.data)
+    if serializer.is_valid():
+        deduction = serializer.save(user=user)
+        return Response(LakawonDeductionSerializer(deduction).data, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT', 'PATCH'])
+def lakawon_deduction_update(request, deduction_id):
+    """Update a Lakawon deduction"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        deduction = LakawonDeduction.objects.get(id=deduction_id, user=user)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except LakawonDeduction.DoesNotExist:
+        return Response({
+            'error': 'Deduction not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = LakawonDeductionSerializer(deduction, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+def lakawon_deduction_delete(request, deduction_id):
+    """Delete a Lakawon deduction and associated cancelled class"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        deduction = LakawonDeduction.objects.get(id=deduction_id, user=user)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except LakawonDeduction.DoesNotExist:
+        return Response({
+            'error': 'Deduction not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Find and delete the associated cancelled class
+    try:
+        cancelled_class = LakawonClass.objects.get(
+            user=user,
+            date=deduction.date,
+            time=deduction.time,
+            cancelled=True
+        )
+        cancelled_class.delete()
+    except LakawonClass.DoesNotExist:
+        # No associated cancelled class found, which is okay
+        pass
+    except LakawonClass.MultipleObjectsReturned:
+        # If multiple cancelled classes exist for the same date/time, delete all of them
+        LakawonClass.objects.filter(
+            user=user,
+            date=deduction.date,
+            time=deduction.time,
+            cancelled=True
+        ).delete()
+    
+    # Delete the deduction
+    deduction.delete()
+    return Response({
+        'message': 'Deduction and associated class deleted successfully.'
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def lakawon_class_cancel(request, class_id):
+    """Cancel a Lakawon class - marks it as cancelled and creates a deduction"""
+    user_id = request.data.get('user_id')
+    student_name = request.data.get('student_name')
+    reason = request.data.get('reason', 'Class cancelled')
+    
+    if not user_id:
+        return Response({
+            'error': 'User ID is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not student_name:
+        return Response({
+            'error': 'Student name is required.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        class_obj = LakawonClass.objects.get(id=class_id, user=user)
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except LakawonClass.DoesNotExist:
+        return Response({
+            'error': 'Class not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Mark class as cancelled
+    class_obj.cancelled = True
+    class_obj.save()
+    
+    # Create deduction
+    deduction = LakawonDeduction.objects.create(
+        user=user,
+        date=class_obj.date,
+        time=class_obj.time,
+        student_name=student_name,
+        reason=reason,
+        amount=5.00  # Default $5 deduction
+    )
+    
+    return Response({
+        'message': 'Class cancelled and deduction created successfully.',
+        'class': LakawonClassSerializer(class_obj).data,
+        'deduction': LakawonDeductionSerializer(deduction).data
+    }, status=status.HTTP_200_OK)

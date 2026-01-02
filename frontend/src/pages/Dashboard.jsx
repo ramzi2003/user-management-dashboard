@@ -17,11 +17,15 @@ import {
   X,
   Sun,
   Moon,
-  ArrowLeft
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Edit
 } from 'lucide-react';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import SalarySection from '../components/SalarySection';
+import Lakawon from '../components/Lakawon';
 import api from '../services/api';
 
 export default function Dashboard() {
@@ -88,14 +92,6 @@ export default function Dashboard() {
     }
   };
 
-  const utilitiesSubsections = [
-    {
-      id: 'lakawon',
-      label: 'Lakawon',
-      icon: <img src="/lakawon-icon.jpg" alt="Lakawon" className="w-5 h-5 rounded-full object-cover" />
-    }
-  ];
-
   const menuItems = [
     {
       id: 'home',
@@ -153,10 +149,6 @@ export default function Dashboard() {
     }
   ];
 
-  // Check if we're in a utilities subsection
-  const isInUtilitiesSubsection = utilitiesSubsections.some(sub => sub.id === activeSection);
-  const activeUtilitiesSubsection = utilitiesSubsections.find(sub => sub.id === activeSection);
-
   const renderContent = () => {
     const contentMap = {
       home: <HomeSection darkMode={darkMode} />,
@@ -168,7 +160,7 @@ export default function Dashboard() {
       travel: <TravelSection darkMode={darkMode} />,
       books: <BooksSection darkMode={darkMode} />,
       utilities: <UtilitiesSection darkMode={darkMode} setActiveSection={setActiveSection} />,
-      lakawon: <LakawonSection darkMode={darkMode} setActiveSection={setActiveSection} />
+      lakawon: <Lakawon darkMode={darkMode} />
     };
     return contentMap[activeSection] || contentMap['home'];
   };
@@ -201,52 +193,23 @@ export default function Dashboard() {
 
         {/* Navigation Items */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-          {menuItems.map((item) => {
-            const isActive = item.id === activeSection || (item.id === 'utilities' && isInUtilitiesSubsection);
-            const showSubmenu = item.id === 'utilities' && isInUtilitiesSubsection && sidebarOpen;
-            
-            return (
-              <div key={item.id}>
-                <button
-                  onClick={() => {
-                    setActiveSection(item.id);
-                    setSidebarOpen(true);
-                  }}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                    isActive
-                      ? `${darkMode ? 'bg-indigo-900 text-indigo-300 border-l-4 border-indigo-500' : 'bg-indigo-50 text-indigo-600 border-l-4 border-indigo-500'}`
-                      : `${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`
-                  }`}
-                >
-                  <span className={item.color}>{item.icon}</span>
-                  {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
-                </button>
-                
-                {/* Utilities Submenu */}
-                {showSubmenu && (
-                  <div className="ml-4 mt-1 space-y-1">
-                    {utilitiesSubsections.map((subItem) => (
-                      <button
-                        key={subItem.id}
-                        onClick={() => {
-                          setActiveSection(subItem.id);
-                          setSidebarOpen(true);
-                        }}
-                        className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition ${
-                          activeSection === subItem.id
-                            ? `${darkMode ? 'bg-indigo-800 text-indigo-200 border-l-4 border-indigo-400' : 'bg-indigo-100 text-indigo-700 border-l-4 border-indigo-400'}`
-                            : `${darkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50'}`
-                        }`}
-                      >
-                        <span>{subItem.icon}</span>
-                        <span className="text-sm font-medium">{subItem.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveSection(item.id);
+                setSidebarOpen(true);
+              }}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+                activeSection === item.id
+                  ? `${darkMode ? 'bg-indigo-900 text-indigo-300 border-l-4 border-indigo-500' : 'bg-indigo-50 text-indigo-600 border-l-4 border-indigo-500'}`
+                  : `${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`
+              }`}
+            >
+              <span className={item.color}>{item.icon}</span>
+              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+            </button>
+          ))}
         </nav>
 
         {/* Dark Mode Toggle and Logout */}
@@ -711,30 +674,6 @@ function UtilitiesSection({ darkMode, setActiveSection }) {
   );
 }
 
-function LakawonSection({ darkMode, setActiveSection }) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-4 mb-6">
-        <button
-          onClick={() => setActiveSection('utilities')}
-          className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${darkMode ? 'text-gray-300' : 'text-gray-600'} hover:${darkMode ? 'text-white' : 'text-gray-900'}`}
-          aria-label="Go back to Utilities"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <img 
-          src="/lakawon-icon.jpg" 
-          alt="Lakawon" 
-          className="w-16 h-16 rounded-full object-cover"
-        />
-        <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Lakawon</h1>
-      </div>
-      <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
-        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Welcome to Lakawon. Content coming soon...</p>
-      </div>
-    </div>
-  );
-}
 
 // UI Components
 function DashboardCard({ icon, title, value, subtitle, color, darkMode }) {

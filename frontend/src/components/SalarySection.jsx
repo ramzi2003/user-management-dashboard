@@ -101,8 +101,8 @@ export default function SalarySection({ darkMode }) {
         if (!prevMonthSaved && (currentIncomes.length > 0 || currentExpenses.length > 0)) {
           // Calculate totals for previous month
           const prevMonthlyIncome = currentIncomes
-            .filter(inc => {
-              const date = new Date(inc.date);
+    .filter(inc => {
+      const date = new Date(inc.date);
               return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
             })
             .reduce((sum, inc) => {
@@ -207,10 +207,10 @@ export default function SalarySection({ darkMode }) {
               return sum + amountInUSD;
             }, 0),
           totalExpenses: currentExpenses
-            .filter(exp => {
-              const date = new Date(exp.date);
-              return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-            })
+    .filter(exp => {
+      const date = new Date(exp.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    })
             .reduce((sum, exp) => {
               const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
               return sum + amountInUSD;
@@ -474,7 +474,7 @@ export default function SalarySection({ darkMode }) {
       {/* Debts Section */}
       <DebtManager 
         debts={debts} 
-        onSave={saveDebts}
+        onSave={saveDebts} 
         expenses={expenses}
         onSaveExpenses={saveExpenses}
         showForm={showDebtForm} 
@@ -544,16 +544,16 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
 
   return (
     <>
-      <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
+    <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
         <div className="flex justify-between items-center mb-6">
-          <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Income This Month</h3>
-          <button
+        <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Income This Month</h3>
+        <button
             onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition"
-          >
+          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition"
+        >
             + Add Income
-          </button>
-        </div>
+        </button>
+      </div>
 
         {/* Visualization - Card Grid */}
         {currentMonthIncomes.length === 0 ? (
@@ -727,29 +727,29 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Description
                 </label>
-                <input
-                  type="text"
+          <input
+            type="text"
                   placeholder="e.g., Salary, Freelance, Bonus"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
                   className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  required
+            required
                   autoFocus
-                />
+          />
               </div>
               <div>
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Amount
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
+          <input
+            type="number"
+            step="0.01"
                   placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
                   className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  required
-                />
+            required
+          />
               </div>
               <div>
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -770,13 +770,13 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Date
                 </label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
                   className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  required
-                />
+            required
+          />
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -794,8 +794,8 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+            </div>
+      </div>
       )}
     </>
   );
@@ -1137,7 +1137,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
             <div key={debt.id} className={`flex justify-between items-center p-3 ${debt.returned ? (darkMode ? 'bg-gray-600 opacity-60' : 'bg-gray-100 opacity-60') : (darkMode ? 'bg-gray-700' : 'bg-gray-50')} rounded-lg ${debt.returned ? 'line-through' : ''}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{debt.person}</p>
+                <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{debt.person}</p>
                   {debt.returned && (
                     <span className={`text-xs px-2 py-0.5 rounded ${darkMode ? 'bg-green-800 text-green-300' : 'bg-green-100 text-green-700'}`}>
                       Returned
@@ -1387,7 +1387,7 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
             <div key={loan.id} className={`flex justify-between items-center p-3 ${loan.returned ? (darkMode ? 'bg-gray-600 opacity-60' : 'bg-gray-100 opacity-60') : (darkMode ? 'bg-gray-700' : 'bg-gray-50')} rounded-lg ${loan.returned ? 'line-through' : ''}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{loan.person}</p>
+                <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{loan.person}</p>
                   {loan.returned && (
                     <span className={`text-xs px-2 py-0.5 rounded ${darkMode ? 'bg-green-800 text-green-300' : 'bg-green-100 text-green-700'}`}>
                       Returned

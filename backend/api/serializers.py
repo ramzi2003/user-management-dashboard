@@ -77,3 +77,37 @@ class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True, style={'input_type': 'password'})
 
+from .models import LakawonClass, LakawonDeduction
+
+class LakawonClassSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LakawonClass
+        fields = ['id', 'date', 'time', 'class_type', 'amount', 'cancelled', 'created_at', 'updated_at']
+        read_only_fields = ['amount', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        # Ensure date and time are provided
+        if 'date' not in data:
+            raise serializers.ValidationError({"date": "Date is required."})
+        if 'time' not in data:
+            raise serializers.ValidationError({"time": "Time is required."})
+        return data
+
+
+class LakawonDeductionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LakawonDeduction
+        fields = ['id', 'date', 'time', 'student_name', 'reason', 'amount', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate(self, data):
+        if 'date' not in data:
+            raise serializers.ValidationError({"date": "Date is required."})
+        if 'time' not in data:
+            raise serializers.ValidationError({"time": "Time is required."})
+        if 'student_name' not in data:
+            raise serializers.ValidationError({"student_name": "Student name is required."})
+        if 'reason' not in data:
+            raise serializers.ValidationError({"reason": "Reason is required."})
+        return data
+
