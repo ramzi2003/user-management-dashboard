@@ -108,24 +108,6 @@ export default function Lakawon({ darkMode }) {
     }
   };
   
-  // Add expense to localStorage (for integration with SalarySection)
-  const addExpenseToLocalStorage = (amount, currency, description, date) => {
-    try {
-      const expenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
-      const newExpense = {
-        id: Date.now().toString(),
-        amount: amount,
-        currency: currency || 'USD',
-        description: description,
-        date: date,
-        category: 'Lakawon Deduction'
-      };
-      expenses.push(newExpense);
-      localStorage.setItem('salary_expenses', JSON.stringify(expenses));
-    } catch (error) {
-      console.error('Error adding expense to localStorage:', error);
-    }
-  };
 
   const handleAddClass = async (e) => {
     e.preventDefault();
@@ -275,10 +257,6 @@ export default function Lakawon({ darkMode }) {
         student_name: cancelFormData.student_name,
         reason: cancelFormData.reason || 'Class cancelled'
       });
-      
-      // Add expense to localStorage
-      const deductionDate = classToCancel.date;
-      addExpenseToLocalStorage(5.00, 'USD', `Lakawon Deduction - ${cancelFormData.student_name}`, deductionDate);
       
       toast.success('Class cancelled and deduction created');
       setShowCancelModal(false);

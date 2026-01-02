@@ -1,7 +1,13 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import SignUpSerializer, EmailVerificationSerializer, LoginSerializer, LakawonClassSerializer, LakawonDeductionSerializer
+from rest_framework.authtoken.models import Token
+from .serializers import (
+    SignUpSerializer, EmailVerificationSerializer, LoginSerializer, 
+    LakawonClassSerializer, LakawonDeductionSerializer,
+    IncomeSerializer, ExpenseSerializer, DebtSerializer, LoanSerializer, SavingsSerializer
+)
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.core.mail import send_mail
@@ -11,7 +17,7 @@ import string
 from django.core.cache import cache
 import requests
 import json
-from .models import LakawonClass, LakawonDeduction
+from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings
 from datetime import datetime, date, timedelta
 from django.utils import timezone
 from django.db import IntegrityError
@@ -142,9 +148,13 @@ def login(request):
                 'error': 'Your account is not verified. Please verify your email first.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        # Return user info
+        # Get or create token for the user
+        token, created = Token.objects.get_or_create(user=authenticated_user)
+        
+        # Return user info and token
         return Response({
             'message': 'Login successful',
+            'token': token.key,
             'user': {
                 'id': authenticated_user.id,
                 'email': authenticated_user.email,
@@ -324,9 +334,13 @@ def google_oauth(request):
                 is_active=True,  # Google users don't need email verification
             )
         
-        # Return user info (you can add JWT token generation here if needed)
+        # Get or create token for the user
+        token, created = Token.objects.get_or_create(user=user)
+        
+        # Return user info with token
         return Response({
             'message': 'Authentication successful',
+            'token': token.key,
             'user': {
                 'id': user.id,
                 'email': user.email,
@@ -847,3 +861,389 @@ def lakawon_class_cancel(request, class_id):
         'class': LakawonClassSerializer(class_obj).data,
         'deduction': LakawonDeductionSerializer(deduction).data
     }, status=status.HTTP_200_OK)
+
+
+# Salary & Income API Views
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def salary_incomes(request):
+    """Get all incomes for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    incomes = Income.objects.filter(user=user)
+    serializer = IncomeSerializer(incomes, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def salary_income_create(request):
+    """Create a new income"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = IncomeSerializer(data=request.data)
+    if serializer.is_valid():
+        income = serializer.save(user=user)
+        return Response(IncomeSerializer(income).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def salary_income_update(request, income_id):
+    """Update an income"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        income = Income.objects.get(id=income_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Income.DoesNotExist:
+        return Response({'error': 'Income not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = IncomeSerializer(income, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def salary_income_delete(request, income_id):
+    """Delete an income"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        income = Income.objects.get(id=income_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Income.DoesNotExist:
+        return Response({'error': 'Income not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    income.delete()
+    return Response({'message': 'Income deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def salary_expenses(request):
+    """Get all expenses for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    expenses = Expense.objects.filter(user=user)
+    serializer = ExpenseSerializer(expenses, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def salary_expense_create(request):
+    """Create a new expense"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = ExpenseSerializer(data=request.data)
+    if serializer.is_valid():
+        expense = serializer.save(user=user)
+        return Response(ExpenseSerializer(expense).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def salary_expense_update(request, expense_id):
+    """Update an expense"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        expense = Expense.objects.get(id=expense_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Expense.DoesNotExist:
+        return Response({'error': 'Expense not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = ExpenseSerializer(expense, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def salary_expense_delete(request, expense_id):
+    """Delete an expense"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        expense = Expense.objects.get(id=expense_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Expense.DoesNotExist:
+        return Response({'error': 'Expense not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    expense.delete()
+    return Response({'message': 'Expense deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def salary_debts(request):
+    """Get all debts for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    debts = Debt.objects.filter(user=user)
+    serializer = DebtSerializer(debts, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def salary_debt_create(request):
+    """Create a new debt"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = DebtSerializer(data=request.data)
+    if serializer.is_valid():
+        debt = serializer.save(user=user)
+        return Response(DebtSerializer(debt).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def salary_debt_update(request, debt_id):
+    """Update a debt"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        debt = Debt.objects.get(id=debt_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Debt.DoesNotExist:
+        return Response({'error': 'Debt not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = DebtSerializer(debt, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def salary_debt_delete(request, debt_id):
+    """Delete a debt"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        debt = Debt.objects.get(id=debt_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Debt.DoesNotExist:
+        return Response({'error': 'Debt not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    debt.delete()
+    return Response({'message': 'Debt deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def salary_loans(request):
+    """Get all loans for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    loans = Loan.objects.filter(user=user)
+    serializer = LoanSerializer(loans, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def salary_loan_create(request):
+    """Create a new loan"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = LoanSerializer(data=request.data)
+    if serializer.is_valid():
+        loan = serializer.save(user=user)
+        return Response(LoanSerializer(loan).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def salary_loan_update(request, loan_id):
+    """Update a loan"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        loan = Loan.objects.get(id=loan_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Loan.DoesNotExist:
+        return Response({'error': 'Loan not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = LoanSerializer(loan, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def salary_loan_delete(request, loan_id):
+    """Delete a loan"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        loan = Loan.objects.get(id=loan_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Loan.DoesNotExist:
+        return Response({'error': 'Loan not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    loan.delete()
+    return Response({'message': 'Loan deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def salary_savings(request):
+    """Get savings for the user"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        savings, created = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
+        serializer = SavingsSerializer(savings)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def salary_savings_update(request):
+    """Update savings for the user"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        savings, created = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    partial = request.method == 'PATCH'
+    serializer = SavingsSerializer(savings, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

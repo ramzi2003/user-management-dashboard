@@ -1,10 +1,11 @@
 import { Navigate } from 'react-router-dom';
 
 function PublicRoute({ children }) {
-  // Check if user is already logged in
+  // Check if user is already logged in (both user and token required)
   const user = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
   
-  if (user) {
+  if (user && token) {
     // Redirect to dashboard if already authenticated
     return <Navigate to="/dashboard" replace />;
   }

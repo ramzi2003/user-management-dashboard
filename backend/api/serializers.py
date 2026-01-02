@@ -77,7 +77,7 @@ class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True, style={'input_type': 'password'})
 
-from .models import LakawonClass, LakawonDeduction
+from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings
 
 class LakawonClassSerializer(serializers.ModelSerializer):
     class Meta:
@@ -98,7 +98,7 @@ class LakawonDeductionSerializer(serializers.ModelSerializer):
     class Meta:
         model = LakawonDeduction
         fields = ['id', 'date', 'time', 'student_name', 'reason', 'amount', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['amount', 'created_at', 'updated_at']
     
     def validate(self, data):
         if 'date' not in data:
@@ -111,3 +111,78 @@ class LakawonDeductionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"reason": "Reason is required."})
         return data
 
+
+class IncomeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Income
+        fields = ['id', 'description', 'amount', 'currency', 'date', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate(self, data):
+        if 'description' not in data or not data['description']:
+            raise serializers.ValidationError({"description": "Description is required."})
+        if 'amount' not in data or data['amount'] <= 0:
+            raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
+        if 'date' not in data:
+            raise serializers.ValidationError({"date": "Date is required."})
+        return data
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Expense
+        fields = ['id', 'description', 'amount', 'currency', 'date', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate(self, data):
+        if 'description' not in data or not data['description']:
+            raise serializers.ValidationError({"description": "Description is required."})
+        if 'amount' not in data or data['amount'] <= 0:
+            raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
+        if 'date' not in data:
+            raise serializers.ValidationError({"date": "Date is required."})
+        return data
+
+
+class DebtSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Debt
+        fields = ['id', 'person', 'description', 'amount', 'currency', 'date', 'returned', 'returnedDate', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate(self, data):
+        if 'person' not in data or not data['person']:
+            raise serializers.ValidationError({"person": "Person is required."})
+        if 'amount' not in data or data['amount'] <= 0:
+            raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
+        if 'date' not in data:
+            raise serializers.ValidationError({"date": "Date is required."})
+        return data
+
+
+class LoanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Loan
+        fields = ['id', 'person', 'description', 'amount', 'currency', 'date', 'returned', 'returnedDate', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate(self, data):
+        if 'person' not in data or not data['person']:
+            raise serializers.ValidationError({"person": "Person is required."})
+        if 'amount' not in data or data['amount'] <= 0:
+            raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
+        if 'date' not in data:
+            raise serializers.ValidationError({"date": "Date is required."})
+        return data
+
+
+class SavingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Savings
+        fields = ['id', 'amount', 'updated_at']
+        read_only_fields = ['updated_at']
+    
+    def validate(self, data):
+        if 'amount' not in data or data['amount'] < 0:
+            raise serializers.ValidationError({"amount": "Amount cannot be negative."})
+        return data

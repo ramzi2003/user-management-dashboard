@@ -20,11 +20,17 @@ function LandingPage() {
   const navigate = useNavigate();
   const { darkMode, toggleDarkMode } = useDarkMode();
 
-  // If authenticated (has token), redirect to dashboard
+  // If authenticated (has both token and user), redirect to dashboard
   const token = localStorage.getItem('token');
   const user = localStorage.getItem('user');
-  if (token || user) {
+  if (token && user) {
     return <Navigate to="/dashboard" replace />;
+  }
+  
+  // Clean up old token keys from previous versions
+  if (localStorage.getItem('access_token') || localStorage.getItem('authToken')) {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('authToken');
   }
 
   const features = [

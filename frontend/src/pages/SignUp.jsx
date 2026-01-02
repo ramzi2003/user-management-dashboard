@@ -154,18 +154,11 @@ function SignUp() {
       });
 
       if (response.status === 200) {
-        toast.success('Email verified successfully! Redirecting...');
-        // Store user info
-        const userData = {
-          id: response.data.user_id,
-          email: email,
-          first_name: firstName,
-          last_name: lastName
-        };
-        localStorage.setItem('user', JSON.stringify(userData));
-        // Redirect to dashboard
+        toast.success('Email verified successfully! Please log in to continue.');
+        // Don't store user yet - they need to log in to get a token
+        // Redirect to sign in
         setTimeout(() => {
-          navigate('/dashboard');
+          navigate('/signin');
         }, 1500);
       }
     } catch (err) {

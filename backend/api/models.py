@@ -47,3 +47,82 @@ class LakawonDeduction(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.date} {self.time} - {self.student_name} (${self.amount})"
+
+
+class Income(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incomes')
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.description} ({self.currency} {self.amount})"
+
+
+class Expense(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses')
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.description} ({self.currency} {self.amount})"
+
+
+class Debt(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='debts')
+    person = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    date = models.DateField()
+    returned = models.BooleanField(default=False)
+    returnedDate = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.person} ({self.currency} {self.amount})"
+
+
+class Loan(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='loans')
+    person = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    date = models.DateField()
+    returned = models.BooleanField(default=False)
+    returnedDate = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.person} ({self.currency} {self.amount})"
+
+
+class Savings(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='savings')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.amount}"

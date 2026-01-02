@@ -46,6 +46,14 @@ export default function Dashboard() {
     localStorage.setItem('dashboard_activeSection', activeSection);
   }, [activeSection]);
 
+  // Clean up old token keys from previous versions on mount
+  useEffect(() => {
+    if (localStorage.getItem('access_token') || localStorage.getItem('authToken')) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('authToken');
+    }
+  }, []);
+
   // Get user info from localStorage
   const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
   const userEmail = userInfo.email || 'user@example.com';

@@ -48,7 +48,10 @@ function SignIn() {
 
       if (response.status === 200) {
         toast.success('Login successful! Redirecting...');
-        // Store user info
+        // Store token and user info
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+        }
         if (response.data.user) {
           localStorage.setItem('user', JSON.stringify(response.data.user));
         }
@@ -120,7 +123,10 @@ function SignIn() {
 
             if (backendResponse.status === 200) {
               toast.success('Successfully signed in with Google!');
-              // Store user info if needed
+              // Store token and user info
+              if (backendResponse.data.token) {
+                localStorage.setItem('token', backendResponse.data.token);
+              }
               if (backendResponse.data.user) {
                 localStorage.setItem('user', JSON.stringify(backendResponse.data.user));
               }

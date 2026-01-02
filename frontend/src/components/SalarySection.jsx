@@ -1,47 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useCurrency } from '../contexts/CurrencyContext';
+import api from '../services/api';
+import { toast } from 'react-toastify';
 
 export default function SalarySection({ darkMode }) {
   const { formatCurrency, convertBetweenCurrencies, currencies, currency: selectedCurrency } = useCurrency();
-  const [incomes, setIncomes] = useState(() => {
-    const saved = localStorage.getItem('salary_incomes');
-    const parsed = saved ? JSON.parse(saved) : [];
-    // Migrate old entries without currency to have USD
-    return parsed.map(inc => ({
-      ...inc,
-      currency: inc.currency || 'USD'
-    }));
-  });
-  const [expenses, setExpenses] = useState(() => {
-    const saved = localStorage.getItem('salary_expenses');
-    const parsed = saved ? JSON.parse(saved) : [];
-    return parsed.map(exp => ({
-      ...exp,
-      currency: exp.currency || 'USD'
-    }));
-  });
-  const [debts, setDebts] = useState(() => {
-    const saved = localStorage.getItem('salary_debts');
-    const parsed = saved ? JSON.parse(saved) : [];
-    return parsed.map(debt => ({
-      ...debt,
-      currency: debt.currency || 'USD',
-      returned: debt.returned || false
-    }));
-  });
-  const [loans, setLoans] = useState(() => {
-    const saved = localStorage.getItem('salary_loans');
-    const parsed = saved ? JSON.parse(saved) : [];
-    return parsed.map(loan => ({
-      ...loan,
-      currency: loan.currency || 'USD',
-      returned: loan.returned || false
-    }));
-  });
-  const [savings, setSavings] = useState(() => {
-    const saved = localStorage.getItem('salary_savings');
-    return saved ? parseFloat(saved) : 0;
-  });
+  const [incomes, setIncomes] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [debts, setDebts] = useState([]);
+  const [loans, setLoans] = useState([]);
+  const [savings, setSavings] = useState(0);
+  const [loading, setLoading] = useState(true);
+  
+  // Get user ID from localStorage
+  const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = userInfo.id;
 
   // Form states
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -50,218 +23,46 @@ export default function SalarySection({ darkMode }) {
   const [showLoanForm, setShowLoanForm] = useState(false);
   const [showSavingsForm, setShowSavingsForm] = useState(false);
 
-  // Monthly rollover logic
+  // Load data from API on mount
   useEffect(() => {
-    const checkMonthlyRollover = () => {
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-      const currentDay = now.getDate();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      
-      // Get last processed month from localStorage
-      let lastProcessedMonth = localStorage.getItem('last_processed_month');
-      let lastProcessedYear = localStorage.getItem('last_processed_year');
-      
-      // Initialize if first time
-      if (lastProcessedMonth === null || lastProcessedYear === null) {
-        localStorage.setItem('last_processed_month', currentMonth.toString());
-        localStorage.setItem('last_processed_year', currentYear.toString());
-        return; // Don't process anything on first run
+    const loadData = async () => {
+      // Check if user has a token (is logged in)
+      const token = localStorage.getItem('token');
+      if (!userId || !token) {
+        setLoading(false);
+        return;
       }
       
-      // Get the last day of the current month
-      const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-      
-      // Check if we're at the end of the month (last day, 23:59)
-      const isEndOfMonth = currentDay === lastDayOfMonth && currentHour === 23 && currentMinute >= 59;
-      
-      // Check if we're in a new month that hasn't been processed yet
-      const isNewMonth = parseInt(lastProcessedMonth) !== currentMonth || parseInt(lastProcessedYear) !== currentYear;
-      
-      // If we're in a new month, first save the previous month's snapshot (if not already saved)
-      if (isNewMonth) {
-        const prevMonth = parseInt(lastProcessedMonth);
-        const prevYear = parseInt(lastProcessedYear);
+      try {
+        setLoading(true);
+        const [incomesRes, expensesRes, debtsRes, loansRes, savingsRes] = await Promise.all([
+          api.get(`/api/salary/incomes/?user_id=${userId}`),
+          api.get(`/api/salary/expenses/?user_id=${userId}`),
+          api.get(`/api/salary/debts/?user_id=${userId}`),
+          api.get(`/api/salary/loans/?user_id=${userId}`),
+          api.get(`/api/salary/savings/?user_id=${userId}`)
+        ]);
         
-        // Get current data from localStorage (to avoid stale state)
-        const currentIncomes = JSON.parse(localStorage.getItem('salary_incomes') || '[]');
-        const currentExpenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
-        const currentDebts = JSON.parse(localStorage.getItem('salary_debts') || '[]');
-        const currentLoans = JSON.parse(localStorage.getItem('salary_loans') || '[]');
-        const currentSavings = parseFloat(localStorage.getItem('salary_savings') || '0');
-        
-        // Check if previous month was already saved
-        const existingHistory = localStorage.getItem('monthly_history');
-        const history = existingHistory ? JSON.parse(existingHistory) : [];
-        const prevMonthSaved = history.some(snapshot => snapshot.month === prevMonth && snapshot.year === prevYear);
-        
-        // If previous month wasn't saved, save it now
-        if (!prevMonthSaved && (currentIncomes.length > 0 || currentExpenses.length > 0)) {
-          // Calculate totals for previous month
-          const prevMonthlyIncome = currentIncomes
-    .filter(inc => {
-      const date = new Date(inc.date);
-              return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
-            })
-            .reduce((sum, inc) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0);
-          
-          const prevTotalExpenses = currentExpenses
-            .filter(exp => {
-              const date = new Date(exp.date);
-              return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
-            })
-            .reduce((sum, exp) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0) + currentSavings;
-          
-          const prevTotalDebts = currentDebts
-            .filter(debt => !debt.returned)
-            .reduce((sum, debt) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(debt.amount || 0), debt.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0);
-          
-          const prevTotalLoans = currentLoans
-            .filter(loan => !loan.returned)
-            .reduce((sum, loan) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(loan.amount || 0), loan.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0);
-          
-          const monthSnapshot = {
-            year: prevYear,
-            month: prevMonth,
-            monthName: new Date(prevYear, prevMonth).toLocaleString('default', { month: 'long' }),
-            timestamp: new Date(prevYear, prevMonth + 1, 0, 23, 59, 59).toISOString(),
-            incomes: currentIncomes,
-            expenses: currentExpenses,
-            debts: currentDebts,
-            loans: currentLoans,
-            savings: currentSavings,
-            monthlyIncome: prevMonthlyIncome,
-            totalExpenses: prevTotalExpenses,
-            totalDebts: prevTotalDebts,
-            totalLoans: prevTotalLoans,
-          };
-          
-          history.push(monthSnapshot);
-          
-          // Keep only last 12 months
-          if (history.length > 12) {
-            history.shift();
-          }
-          
-          localStorage.setItem('monthly_history', JSON.stringify(history));
+        setIncomes(incomesRes.data || []);
+        setExpenses(expensesRes.data || []);
+        setDebts(debtsRes.data || []);
+        setLoans(loansRes.data || []);
+        setSavings(parseFloat(savingsRes.data?.amount || 0));
+      } catch (error) {
+        // Only show error if it's not a 401 (unauthorized) - user just needs to log in
+        if (error.response?.status !== 401) {
+          console.error('Error loading salary data:', error);
+          toast.error('Failed to load salary data');
         }
-        
-        // Clear income and expenses for the new month (keep savings, unreturned debts/loans)
-        // Only clear if we haven't already cleared (check if arrays are empty)
-        const savedIncomes = JSON.parse(localStorage.getItem('salary_incomes') || '[]');
-        const savedExpenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
-        
-        // Only clear if there's data to clear (avoid clearing repeatedly)
-        if (savedIncomes.length > 0 || savedExpenses.length > 0) {
-          setIncomes([]);
-          setExpenses([]);
-          localStorage.setItem('salary_incomes', JSON.stringify([]));
-          localStorage.setItem('salary_expenses', JSON.stringify([]));
-        }
-        
-        // Mark this month as processed immediately to prevent repeated clearing
-        localStorage.setItem('last_processed_month', currentMonth.toString());
-        localStorage.setItem('last_processed_year', currentYear.toString());
-      }
-      
-      // If it's the end of the current month, save snapshot
-      if (isEndOfMonth) {
-        // Get current data from localStorage
-        const currentIncomes = JSON.parse(localStorage.getItem('salary_incomes') || '[]');
-        const currentExpenses = JSON.parse(localStorage.getItem('salary_expenses') || '[]');
-        const currentDebts = JSON.parse(localStorage.getItem('salary_debts') || '[]');
-        const currentLoans = JSON.parse(localStorage.getItem('salary_loans') || '[]');
-        const currentSavings = parseFloat(localStorage.getItem('salary_savings') || '0');
-        
-        const monthSnapshot = {
-          year: currentYear,
-          month: currentMonth,
-          monthName: now.toLocaleString('default', { month: 'long' }),
-          timestamp: now.toISOString(),
-          incomes: currentIncomes,
-          expenses: currentExpenses,
-          debts: currentDebts,
-          loans: currentLoans,
-          savings: currentSavings,
-          monthlyIncome: currentIncomes
-            .filter(inc => {
-              const date = new Date(inc.date);
-              return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-            })
-            .reduce((sum, inc) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(inc.amount || 0), inc.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0),
-          totalExpenses: currentExpenses
-    .filter(exp => {
-      const date = new Date(exp.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    })
-            .reduce((sum, exp) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(exp.amount || 0), exp.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0) + currentSavings,
-          totalDebts: currentDebts
-            .filter(debt => !debt.returned)
-            .reduce((sum, debt) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(debt.amount || 0), debt.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0),
-          totalLoans: currentLoans
-            .filter(loan => !loan.returned)
-            .reduce((sum, loan) => {
-              const amountInUSD = convertBetweenCurrencies(parseFloat(loan.amount || 0), loan.currency || 'USD', 'USD');
-              return sum + amountInUSD;
-            }, 0),
-        };
-        
-        // Get existing history
-        const existingHistory = localStorage.getItem('monthly_history');
-        const history = existingHistory ? JSON.parse(existingHistory) : [];
-        
-        // Check if this month is already saved
-        const alreadySaved = history.some(snapshot => snapshot.month === currentMonth && snapshot.year === currentYear);
-        if (!alreadySaved) {
-          // Add new snapshot
-          history.push(monthSnapshot);
-          
-          // Keep only last 12 months
-          if (history.length > 12) {
-            history.shift();
-          }
-          
-          // Save history
-          localStorage.setItem('monthly_history', JSON.stringify(history));
-        }
-        
-        // Mark this month as processed
-        localStorage.setItem('last_processed_month', currentMonth.toString());
-        localStorage.setItem('last_processed_year', currentYear.toString());
+      } finally {
+        setLoading(false);
       }
     };
     
-    // Check immediately on mount
-    checkMonthlyRollover();
-    
-    // Check every minute
-    const interval = setInterval(checkMonthlyRollover, 60000);
-    
-    return () => clearInterval(interval);
-  }, [convertBetweenCurrencies]); // Only depend on convertBetweenCurrencies, not on state values
+    loadData();
+  }, [userId]);
+
+  // Monthly rollover logic - REMOVED: Data is now in database, no need for localStorage rollover
 
   // Helper function to calculate total efficiently
   // Returns { amount: number in selected currency, isDirectSum: boolean }
@@ -378,31 +179,54 @@ export default function SalarySection({ darkMode }) {
   // Available Money = Income - Expenses + Debts (current month, not returned) - Debts (returned this month) - Loans (current month, not returned) + Loans (returned this month)
   const netSavings = monthlyIncome - totalExpenses + nonReturnedDebtsResult.amount - returnedDebtsResult.amount - nonReturnedLoansResult.amount + returnedLoansResult.amount;
 
-  // Save to localStorage
-  const saveIncomes = (newIncomes) => {
+  // Save functions - now using API
+  const saveIncomes = async (newIncomes) => {
     setIncomes(newIncomes);
-    localStorage.setItem('salary_incomes', JSON.stringify(newIncomes));
+    // Note: Individual items are saved via API in handlers
   };
 
-  const saveExpenses = (newExpenses) => {
+  const saveExpenses = async (newExpenses) => {
     setExpenses(newExpenses);
-    localStorage.setItem('salary_expenses', JSON.stringify(newExpenses));
+    // Note: Individual items are saved via API in handlers
   };
 
-  const saveDebts = (newDebts) => {
+  const saveDebts = async (newDebts) => {
     setDebts(newDebts);
-    localStorage.setItem('salary_debts', JSON.stringify(newDebts));
+    // Note: Individual items are saved via API in handlers
   };
 
-  const saveLoans = (newLoans) => {
+  const saveLoans = async (newLoans) => {
     setLoans(newLoans);
-    localStorage.setItem('salary_loans', JSON.stringify(newLoans));
+    // Note: Individual items are saved via API in handlers
   };
 
-  const saveSavings = (newSavings) => {
-    setSavings(newSavings);
-    localStorage.setItem('salary_savings', newSavings.toString());
+  const saveSavings = async (newSavings) => {
+    if (!userId) return;
+    try {
+      await api.patch(`/api/salary/savings/update/`, {
+        user_id: userId,
+        amount: newSavings
+      });
+      setSavings(newSavings);
+    } catch (error) {
+      console.error('Error saving savings:', error);
+      toast.error('Failed to save savings');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Salary & Income</h1>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading salary data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -488,7 +312,9 @@ export default function SalarySection({ darkMode }) {
         onSave={saveLoans} 
         showForm={showLoanForm} 
         setShowForm={setShowLoanForm}
-        darkMode={darkMode} 
+        darkMode={darkMode}
+        incomes={incomes}
+        onSaveIncomes={saveIncomes}
       />
 
       {/* Savings Section */}
@@ -511,29 +337,52 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [incomeCurrency, setIncomeCurrency] = useState('USD');
   const [showAllIncomes, setShowAllIncomes] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   const DISPLAY_LIMIT = 4;
+  const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = userInfo.id;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!description || !amount || !date) return;
+    if (!description || !amount || !date || !userId) return;
     
-    const newIncome = {
-      id: Date.now(),
-      description,
-      amount: parseFloat(amount),
-      date,
-      currency: incomeCurrency
-    };
-    onSave([...incomes, newIncome]);
-    setDescription('');
-    setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
-    setShowForm(false);
+    setLoading(true);
+    try {
+      const response = await api.post('/api/salary/incomes/create/', {
+        user_id: userId,
+        description,
+        amount: parseFloat(amount),
+        date,
+        currency: incomeCurrency
+      });
+      onSave([...incomes, response.data]);
+      setDescription('');
+      setAmount('');
+      setDate(new Date().toISOString().split('T')[0]);
+      setShowForm(false);
+      toast.success('Income added successfully');
+    } catch (error) {
+      console.error('Error adding income:', error);
+      toast.error(error.response?.data?.error || 'Failed to add income');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    onSave(incomes.filter(inc => inc.id !== id));
+  const handleDelete = async (id) => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      await api.delete(`/api/salary/incomes/${id}/delete/?user_id=${userId}`);
+      onSave(incomes.filter(inc => inc.id !== id));
+      toast.success('Income deleted successfully');
+    } catch (error) {
+      console.error('Error deleting income:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete income');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentMonthIncomes = incomes.filter(inc => {
@@ -810,28 +659,51 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
   const [showAllExpenses, setShowAllExpenses] = useState(false);
   
   const DISPLAY_LIMIT = 4;
+  const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = userInfo.id;
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!description || !amount || !date) return;
+    if (!description || !amount || !date || !userId) return;
     
-    const newExpense = {
-      id: Date.now(),
-      description,
-      amount: parseFloat(amount),
-      date,
-      currency: expenseCurrency
-    };
-    onSave([...expenses, newExpense]);
-    setDescription('');
-    setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
-    setExpenseCurrency('USD');
-    setShowForm(false);
+    setLoading(true);
+    try {
+      const response = await api.post('/api/salary/expenses/create/', {
+        user_id: userId,
+        description,
+        amount: parseFloat(amount),
+        date,
+        currency: expenseCurrency
+      });
+      onSave([...expenses, response.data]);
+      setDescription('');
+      setAmount('');
+      setDate(new Date().toISOString().split('T')[0]);
+      setExpenseCurrency('USD');
+      setShowForm(false);
+      toast.success('Expense added successfully');
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      toast.error(error.response?.data?.error || 'Failed to add expense');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    onSave(expenses.filter(exp => exp.id !== id));
+  const handleDelete = async (id) => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      await api.delete(`/api/salary/expenses/${id}/delete/?user_id=${userId}`);
+      onSave(expenses.filter(exp => exp.id !== id));
+      toast.success('Expense deleted successfully');
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete expense');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentMonthExpenses = expenses.filter(exp => {
@@ -1007,63 +879,154 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
   const [debtCurrency, setDebtCurrency] = useState('USD');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllDebts, setShowAllDebts] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   const DISPLAY_LIMIT = 4;
+  const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = userInfo.id;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!person || !amount) return;
+    if (!person || !amount || !userId) return;
     
-    const newDebt = {
-      id: Date.now(),
-      person,
-      amount: parseFloat(amount),
-      description: description || 'No description',
-      currency: debtCurrency,
-      date: date
-    };
-    onSave([...debts, newDebt]);
-    setPerson('');
-    setAmount('');
-    setDescription('');
-    setDebtCurrency('USD');
-    setDate(new Date().toISOString().split('T')[0]);
-    setShowForm(false);
+    setLoading(true);
+    try {
+      const response = await api.post('/api/salary/debts/create/', {
+        user_id: userId,
+        person,
+        amount: parseFloat(amount),
+        description: description || 'No description',
+        currency: debtCurrency,
+        date: date
+      });
+      onSave([...debts, response.data]);
+      setPerson('');
+      setAmount('');
+      setDescription('');
+      setDebtCurrency('USD');
+      setDate(new Date().toISOString().split('T')[0]);
+      setShowForm(false);
+      toast.success('Debt added successfully');
+    } catch (error) {
+      console.error('Error adding debt:', error);
+      toast.error(error.response?.data?.error || 'Failed to add debt');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    onSave(debts.filter(debt => debt.id !== id));
+  const handleDelete = async (id) => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      await api.delete(`/api/salary/debts/${id}/delete/?user_id=${userId}`);
+      onSave(debts.filter(debt => debt.id !== id));
+      toast.success('Debt deleted successfully');
+    } catch (error) {
+      console.error('Error deleting debt:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete debt');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleToggleReturned = (id) => {
+  const handleToggleReturned = async (id) => {
+    if (!userId) return;
     const debtToUpdate = debts.find(debt => debt.id === id);
     if (!debtToUpdate) return;
 
     const isCurrentlyReturned = debtToUpdate.returned || false;
     const returnDate = new Date().toISOString().split('T')[0];
+    const oldReturnedDate = debtToUpdate.returnedDate;
 
-    // Update the debt
-    onSave(debts.map(debt => {
-      if (debt.id === id) {
-        return {
-          ...debt,
-          returned: !isCurrentlyReturned,
-          returnedDate: !isCurrentlyReturned ? returnDate : null
-        };
+    setLoading(true);
+    try {
+      // Update the debt via API
+      const response = await api.patch(`/api/salary/debts/${id}/`, {
+        user_id: userId,
+        returned: !isCurrentlyReturned,
+        returnedDate: !isCurrentlyReturned ? returnDate : null
+      });
+      
+      // Update local state
+      onSave(debts.map(debt => debt.id === id ? response.data : debt));
+
+      const debtCurrency = debtToUpdate.currency || 'USD';
+      const debtAmount = parseFloat(debtToUpdate.amount);
+      
+      if (!isCurrentlyReturned) {
+        // If marking as returned, update or create the "Returned debts" expense entry
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        // Find existing "Returned debts" expense for this month and currency
+        const returnedDebtsExpenseIndex = expenses.findIndex(expense => {
+          const expenseDate = new Date(expense.date);
+          return expense.description === 'Returned debts' &&
+                 expenseDate.getMonth() === currentMonth &&
+                 expenseDate.getFullYear() === currentYear &&
+                 (expense.currency || 'USD') === debtCurrency;
+        });
+        
+        if (returnedDebtsExpenseIndex !== -1) {
+          // Update existing entry via API
+          const existingExpense = expenses[returnedDebtsExpenseIndex];
+          const updatedAmount = parseFloat(existingExpense.amount) + debtAmount;
+          const updateResponse = await api.patch(`/api/salary/expenses/${existingExpense.id}/`, {
+            user_id: userId,
+            amount: updatedAmount
+          });
+          onSaveExpenses(expenses.map(exp => exp.id === existingExpense.id ? updateResponse.data : exp));
+        } else {
+          // Create new entry via API
+          const newExpenseResponse = await api.post('/api/salary/expenses/create/', {
+            user_id: userId,
+            description: 'Returned debts',
+            amount: debtAmount,
+            date: returnDate,
+            currency: debtCurrency
+          });
+          onSaveExpenses([...expenses, newExpenseResponse.data]);
+        }
+      } else {
+        // If un-returning, update the "Returned debts" expense entry
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        // Find existing "Returned debts" expense for this month and currency
+        const returnedDebtsExpenseIndex = expenses.findIndex(expense => {
+          const expenseDate = new Date(expense.date);
+          return expense.description === 'Returned debts' &&
+                 expenseDate.getMonth() === currentMonth &&
+                 expenseDate.getFullYear() === currentYear &&
+                 (expense.currency || 'USD') === debtCurrency;
+        });
+        
+        if (returnedDebtsExpenseIndex !== -1) {
+          const existingExpense = expenses[returnedDebtsExpenseIndex];
+          const currentAmount = parseFloat(existingExpense.amount);
+          const newAmount = currentAmount - debtAmount;
+          
+          if (newAmount <= 0) {
+            // Delete the entry via API
+            await api.delete(`/api/salary/expenses/${existingExpense.id}/delete/?user_id=${userId}`);
+            onSaveExpenses(expenses.filter(exp => exp.id !== existingExpense.id));
+          } else {
+            // Update the amount via API
+            const updateResponse = await api.patch(`/api/salary/expenses/${existingExpense.id}/`, {
+              user_id: userId,
+              amount: newAmount
+            });
+            onSaveExpenses(expenses.map(exp => exp.id === existingExpense.id ? updateResponse.data : exp));
+          }
+        }
       }
-      return debt;
-    }));
-
-    // If marking as returned (not un-returning), add an expense
-    if (!isCurrentlyReturned) {
-      const newExpense = {
-        id: Date.now(),
-        description: `Returned debt - ${debtToUpdate.person}`,
-        amount: debtToUpdate.amount,
-        date: returnDate,
-        currency: debtToUpdate.currency || 'USD'
-      };
-      onSaveExpenses([...expenses, newExpense]);
+      toast.success(`Debt ${!isCurrentlyReturned ? 'marked as returned' : 'marked as not returned'}`);
+    } catch (error) {
+      console.error('Error toggling debt returned status:', error);
+      toast.error(error.response?.data?.error || 'Failed to update debt');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1267,7 +1230,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
   );
 }
 
-function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
+function LoanManager({ loans, onSave, showForm, setShowForm, darkMode, incomes, onSaveIncomes }) {
   const { currencies } = useCurrency();
   const [person, setPerson] = useState('');
   const [amount, setAmount] = useState('');
@@ -1275,46 +1238,156 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
   const [loanCurrency, setLoanCurrency] = useState('USD');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllLoans, setShowAllLoans] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   const DISPLAY_LIMIT = 4;
+  const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = userInfo.id;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!person || !amount) return;
+    if (!person || !amount || !userId) return;
     
-    const newLoan = {
-      id: Date.now(),
-      person,
-      amount: parseFloat(amount),
-      description: description || 'No description',
-      currency: loanCurrency,
-      date: date
-    };
-    onSave([...loans, newLoan]);
-    setPerson('');
-    setAmount('');
-    setDescription('');
-    setLoanCurrency('USD');
-    setDate(new Date().toISOString().split('T')[0]);
-    setShowForm(false);
+    setLoading(true);
+    try {
+      const response = await api.post('/api/salary/loans/create/', {
+        user_id: userId,
+        person,
+        amount: parseFloat(amount),
+        description: description || 'No description',
+        currency: loanCurrency,
+        date: date
+      });
+      onSave([...loans, response.data]);
+      setPerson('');
+      setAmount('');
+      setDescription('');
+      setLoanCurrency('USD');
+      setDate(new Date().toISOString().split('T')[0]);
+      setShowForm(false);
+      toast.success('Loan added successfully');
+    } catch (error) {
+      console.error('Error adding loan:', error);
+      toast.error(error.response?.data?.error || 'Failed to add loan');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    onSave(loans.filter(loan => loan.id !== id));
+  const handleDelete = async (id) => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      await api.delete(`/api/salary/loans/${id}/delete/?user_id=${userId}`);
+      onSave(loans.filter(loan => loan.id !== id));
+      toast.success('Loan deleted successfully');
+    } catch (error) {
+      console.error('Error deleting loan:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete loan');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleToggleReturned = (id) => {
-    onSave(loans.map(loan => {
-      if (loan.id === id) {
-        const isCurrentlyReturned = loan.returned || false;
-        return {
-          ...loan,
-          returned: !isCurrentlyReturned,
-          returnedDate: !isCurrentlyReturned ? new Date().toISOString().split('T')[0] : null
-        };
+  const handleToggleReturned = async (id) => {
+    if (!userId) return;
+    const loanToUpdate = loans.find(loan => loan.id === id);
+    if (!loanToUpdate) return;
+
+    const isCurrentlyReturned = loanToUpdate.returned || false;
+    const returnDate = new Date().toISOString().split('T')[0];
+    const oldReturnedDate = loanToUpdate.returnedDate;
+
+    setLoading(true);
+    try {
+      // Update the loan via API
+      const response = await api.patch(`/api/salary/loans/${id}/`, {
+        user_id: userId,
+        returned: !isCurrentlyReturned,
+        returnedDate: !isCurrentlyReturned ? returnDate : null
+      });
+      
+      // Update local state
+      onSave(loans.map(loan => loan.id === id ? response.data : loan));
+
+      const loanCurrency = loanToUpdate.currency || 'USD';
+      const loanAmount = parseFloat(loanToUpdate.amount);
+      
+      // Check if the loan was made in a previous month (not current month)
+      const loanDate = loanToUpdate.date ? new Date(loanToUpdate.date) : new Date(loanToUpdate.id);
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
+      const loanMonth = loanDate.getMonth();
+      const loanYear = loanDate.getFullYear();
+      const isFromPreviousMonth = loanMonth !== currentMonth || loanYear !== currentYear;
+      
+      if (!isCurrentlyReturned && isFromPreviousMonth) {
+        // If marking as returned AND loan is from previous month, update or create the "Returned loans" income entry
+        const returnedLoansIncomeIndex = incomes.findIndex(income => {
+          const incomeDate = new Date(income.date);
+          return income.description === 'Returned loans' &&
+                 incomeDate.getMonth() === currentMonth &&
+                 incomeDate.getFullYear() === currentYear &&
+                 (income.currency || 'USD') === loanCurrency;
+        });
+        
+        if (returnedLoansIncomeIndex !== -1) {
+          // Update existing entry via API
+          const existingIncome = incomes[returnedLoansIncomeIndex];
+          const updatedAmount = parseFloat(existingIncome.amount) + loanAmount;
+          const updateResponse = await api.patch(`/api/salary/incomes/${existingIncome.id}/`, {
+            user_id: userId,
+            amount: updatedAmount
+          });
+          onSaveIncomes(incomes.map(inc => inc.id === existingIncome.id ? updateResponse.data : inc));
+        } else {
+          // Create new entry via API
+          const newIncomeResponse = await api.post('/api/salary/incomes/create/', {
+            user_id: userId,
+            description: 'Returned loans',
+            amount: loanAmount,
+            date: returnDate,
+            currency: loanCurrency
+          });
+          onSaveIncomes([...incomes, newIncomeResponse.data]);
+        }
+      } else if (isCurrentlyReturned && isFromPreviousMonth) {
+        // If un-returning AND loan is from previous month, update the "Returned loans" income entry
+        const returnedLoansIncomeIndex = incomes.findIndex(income => {
+          const incomeDate = new Date(income.date);
+          return income.description === 'Returned loans' &&
+                 incomeDate.getMonth() === currentMonth &&
+                 incomeDate.getFullYear() === currentYear &&
+                 (income.currency || 'USD') === loanCurrency;
+        });
+        
+        if (returnedLoansIncomeIndex !== -1) {
+          const existingIncome = incomes[returnedLoansIncomeIndex];
+          const currentAmount = parseFloat(existingIncome.amount);
+          const newAmount = currentAmount - loanAmount;
+          
+          if (newAmount <= 0) {
+            // Delete the entry via API
+            await api.delete(`/api/salary/incomes/${existingIncome.id}/delete/?user_id=${userId}`);
+            onSaveIncomes(incomes.filter(inc => inc.id !== existingIncome.id));
+          } else {
+            // Update the amount via API
+            const updateResponse = await api.patch(`/api/salary/incomes/${existingIncome.id}/`, {
+              user_id: userId,
+              amount: newAmount
+            });
+            onSaveIncomes(incomes.map(inc => inc.id === existingIncome.id ? updateResponse.data : inc));
+          }
+        }
       }
-      return loan;
-    }));
+      toast.success(`Loan ${!isCurrentlyReturned ? 'marked as returned' : 'marked as not returned'}`);
+    } catch (error) {
+      console.error('Error toggling loan returned status:', error);
+      toast.error(error.response?.data?.error || 'Failed to update loan');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1520,13 +1593,25 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode }) {
 function SavingsManager({ savings, onSave, showForm, setShowForm, darkMode }) {
   const { formatCurrency } = useCurrency();
   const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const userInfo = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = userInfo.id;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!amount) return;
-    onSave(parseFloat(amount));
-    setAmount('');
-    setShowForm(false);
+    if (!amount || !userId) return;
+    setLoading(true);
+    try {
+      await onSave(parseFloat(amount));
+      setAmount('');
+      setShowForm(false);
+      toast.success('Savings updated successfully');
+    } catch (error) {
+      console.error('Error updating savings:', error);
+      toast.error(error.response?.data?.error || 'Failed to update savings');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
