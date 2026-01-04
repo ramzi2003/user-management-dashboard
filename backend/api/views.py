@@ -21,6 +21,33 @@ from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan,
 from datetime import datetime, date, timedelta
 from django.utils import timezone
 from django.db import IntegrityError
+from decimal import Decimal
+
+# Exchange rates (same as frontend)
+EXCHANGE_RATES = {
+    'USD': {'buy': 1, 'sell': 1},
+    'KGS': {'buy': 89.5, 'sell': 90.0},
+    'TJS': {'buy': 10.9, 'sell': 11.0}
+}
+
+def convert_between_currencies(amount, from_currency, to_currency):
+    """Convert amount from one currency to another"""
+    if from_currency == to_currency:
+        return float(amount)
+    
+    # First convert to USD (using sell rate if selling the fromCurrency)
+    if from_currency == 'USD':
+        amount_in_usd = float(amount)
+    else:
+        # Selling fromCurrency to get USD
+        amount_in_usd = float(amount) / EXCHANGE_RATES[from_currency]['sell']
+    
+    # Then convert from USD to toCurrency (using buy rate if buying toCurrency)
+    if to_currency == 'USD':
+        return amount_in_usd
+    else:
+        # Buying toCurrency with USD
+        return amount_in_usd * EXCHANGE_RATES[to_currency]['buy']
 
 @api_view(['GET'])
 def health_check(request):
@@ -1094,7 +1121,10 @@ def salary_debt_update(request, debt_id):
         return Response({'error': 'Debt not found.'}, status=status.HTTP_404_NOT_FOUND)
     
     partial = request.method == 'PATCH'
-    serializer = DebtSerializer(debt, data=request.data, partial=partial)
+    # Remove user_id from data before passing to serializer (it's not a model field)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = DebtSerializer(debt, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1180,7 +1210,10 @@ def salary_loan_update(request, loan_id):
         return Response({'error': 'Loan not found.'}, status=status.HTTP_404_NOT_FOUND)
     
     partial = request.method == 'PATCH'
-    serializer = LoanSerializer(loan, data=request.data, partial=partial)
+    # Remove user_id from data before passing to serializer (it's not a model field)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = LoanSerializer(loan, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1247,3 +1280,137 @@ def salary_savings_update(request):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def salary_summary(request):
+    """Get financial summary with all calculations done in backend"""
+    user_id = request.GET.get('user_id')
+    currency = request.GET.get('currency', 'USD')  # Default to USD if not provided
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if currency not in EXCHANGE_RATES:
+        return Response({'error': 'Invalid currency.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get current month and year
+    now = timezone.now()
+    current_month = now.month
+    current_year = now.year
+    
+    # Get all data
+    incomes = Income.objects.filter(user=user)
+    expenses = Expense.objects.filter(user=user)
+    debts = Debt.objects.filter(user=user)
+    loans = Loan.objects.filter(user=user)
+    savings_obj, _ = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
+    
+    # Helper function to check if date is in current month
+    def is_current_month(d):
+        return d.month == current_month and d.year == current_year
+    
+    # Helper function to check if returned in current month
+    def is_returned_in_current_month(item):
+        if not item.returned or not item.returnedDate:
+            return False
+        return item.returnedDate.month == current_month and item.returnedDate.year == current_year
+    
+    # Calculate monthly income (current month)
+    monthly_income_usd = Decimal('0')
+    for income in incomes:
+        if is_current_month(income.date):
+            amount_usd = convert_between_currencies(income.amount, income.currency, 'USD')
+            monthly_income_usd += Decimal(str(amount_usd))
+    monthly_income = convert_between_currencies(float(monthly_income_usd), 'USD', currency)
+    
+    # Calculate YTD income
+    ytd_income_usd = Decimal('0')
+    for income in incomes:
+        if income.date.year == current_year:
+            amount_usd = convert_between_currencies(income.amount, income.currency, 'USD')
+            ytd_income_usd += Decimal(str(amount_usd))
+    ytd_income = convert_between_currencies(float(ytd_income_usd), 'USD', currency)
+    
+    # Calculate total expenses (excluding "Returned debts" for netSavings calculation)
+    total_expenses_usd = Decimal('0')
+    returned_debts_expense_usd = Decimal('0')
+    for expense in expenses:
+        if is_current_month(expense.date):
+            amount_usd = convert_between_currencies(expense.amount, expense.currency, 'USD')
+            if expense.description == 'Returned debts':
+                returned_debts_expense_usd += Decimal(str(amount_usd))
+            else:
+                total_expenses_usd += Decimal(str(amount_usd))
+    
+    # Add savings (stored in USD)
+    savings_amount = float(savings_obj.amount)
+    total_expenses_usd += Decimal(str(savings_amount))
+    total_expenses = convert_between_currencies(float(total_expenses_usd), 'USD', currency)
+    returned_debts_expense = convert_between_currencies(float(returned_debts_expense_usd), 'USD', currency)
+    
+    # Total expenses for display (including returned debts)
+    total_expenses_display = total_expenses + returned_debts_expense
+    
+    # Calculate total debts (non-returned) for display
+    all_debts_usd = Decimal('0')
+    for debt in debts:
+        if not debt.returned:
+            amount_usd = convert_between_currencies(debt.amount, debt.currency, 'USD')
+            all_debts_usd += Decimal(str(amount_usd))
+    all_debts = convert_between_currencies(float(all_debts_usd), 'USD', currency)
+    
+    # Calculate total loans (non-returned) for display
+    all_loans_usd = Decimal('0')
+    for loan in loans:
+        if not loan.returned:
+            amount_usd = convert_between_currencies(loan.amount, loan.currency, 'USD')
+            all_loans_usd += Decimal(str(amount_usd))
+    all_loans = convert_between_currencies(float(all_loans_usd), 'USD', currency)
+    
+    # Calculate available money (netSavings)
+    # Debts from current month that are NOT returned: ADD (you have this money)
+    non_returned_debts_usd = Decimal('0')
+    for debt in debts:
+        if is_current_month(debt.date) and not debt.returned:
+            amount_usd = convert_between_currencies(debt.amount, debt.currency, 'USD')
+            non_returned_debts_usd += Decimal(str(amount_usd))
+    non_returned_debts = convert_between_currencies(float(non_returned_debts_usd), 'USD', currency)
+    
+    # Loans from current month that are NOT returned: SUBTRACT (you don't have this money)
+    non_returned_loans_usd = Decimal('0')
+    for loan in loans:
+        if is_current_month(loan.date) and not loan.returned:
+            amount_usd = convert_between_currencies(loan.amount, loan.currency, 'USD')
+            non_returned_loans_usd += Decimal(str(amount_usd))
+    non_returned_loans = convert_between_currencies(float(non_returned_loans_usd), 'USD', currency)
+    
+    # Loans returned in current month: ADD (you got the money back)
+    returned_loans_usd = Decimal('0')
+    for loan in loans:
+        if is_returned_in_current_month(loan):
+            # Only count loans from previous months
+            if loan.date.month < current_month or loan.date.year < current_year:
+                amount_usd = convert_between_currencies(loan.amount, loan.currency, 'USD')
+                returned_loans_usd += Decimal(str(amount_usd))
+    returned_loans = convert_between_currencies(float(returned_loans_usd), 'USD', currency)
+    
+    # Available Money = Income - Expenses (including returned debts) + Debts (current month, not returned) - Loans (current month, not returned) + Loans (returned this month)
+    net_savings = monthly_income - total_expenses_display + non_returned_debts - non_returned_loans + returned_loans
+    
+    return Response({
+        'monthly_income': round(monthly_income, 2),
+        'ytd_income': round(ytd_income, 2),
+        'total_expenses': round(total_expenses_display, 2),
+        'savings': round(convert_between_currencies(savings_amount, 'USD', currency), 2),
+        'available_money': round(net_savings, 2),
+        'total_debts': round(all_debts, 2),
+        'total_loans': round(all_loans, 2),
+        'currency': currency
+    }, status=status.HTTP_200_OK)

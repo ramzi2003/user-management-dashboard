@@ -4,12 +4,13 @@ import api from '../services/api';
 import { toast } from 'react-toastify';
 
 export default function SalarySection({ darkMode }) {
-  const { formatCurrency, convertBetweenCurrencies, currencies, currency: selectedCurrency } = useCurrency();
+  const { formatCurrency, currencies, currency: selectedCurrency } = useCurrency();
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [debts, setDebts] = useState([]);
   const [loans, setLoans] = useState([]);
   const [savings, setSavings] = useState(0);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   
   // Get user ID from localStorage
@@ -23,181 +24,75 @@ export default function SalarySection({ darkMode }) {
   const [showLoanForm, setShowLoanForm] = useState(false);
   const [showSavingsForm, setShowSavingsForm] = useState(false);
 
-  // Load data from API on mount
-  useEffect(() => {
-    const loadData = async () => {
-      // Check if user has a token (is logged in)
-      const token = localStorage.getItem('token');
-      if (!userId || !token) {
-        setLoading(false);
-        return;
-      }
+  // Load data and summary from API
+  const loadData = async () => {
+    // Check if user has a token (is logged in)
+    const token = localStorage.getItem('token');
+    if (!userId || !token) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const [incomesRes, expensesRes, debtsRes, loansRes, savingsRes, summaryRes] = await Promise.all([
+        api.get(`/api/salary/incomes/?user_id=${userId}`),
+        api.get(`/api/salary/expenses/?user_id=${userId}`),
+        api.get(`/api/salary/debts/?user_id=${userId}`),
+        api.get(`/api/salary/loans/?user_id=${userId}`),
+        api.get(`/api/salary/savings/?user_id=${userId}`),
+        api.get(`/api/salary/summary/?user_id=${userId}&currency=${selectedCurrency}`)
+      ]);
       
-      try {
-        setLoading(true);
-        const [incomesRes, expensesRes, debtsRes, loansRes, savingsRes] = await Promise.all([
-          api.get(`/api/salary/incomes/?user_id=${userId}`),
-          api.get(`/api/salary/expenses/?user_id=${userId}`),
-          api.get(`/api/salary/debts/?user_id=${userId}`),
-          api.get(`/api/salary/loans/?user_id=${userId}`),
-          api.get(`/api/salary/savings/?user_id=${userId}`)
-        ]);
-        
-        setIncomes(incomesRes.data || []);
-        setExpenses(expensesRes.data || []);
-        setDebts(debtsRes.data || []);
-        setLoans(loansRes.data || []);
-        setSavings(parseFloat(savingsRes.data?.amount || 0));
-      } catch (error) {
-        // Only show error if it's not a 401 (unauthorized) - user just needs to log in
-        if (error.response?.status !== 401) {
-          console.error('Error loading salary data:', error);
-          toast.error('Failed to load salary data');
-        }
-      } finally {
-        setLoading(false);
+      setIncomes(incomesRes.data || []);
+      setExpenses(expensesRes.data || []);
+      setDebts(debtsRes.data || []);
+      setLoans(loansRes.data || []);
+      setSavings(parseFloat(savingsRes.data?.amount || 0));
+      setSummary(summaryRes.data);
+    } catch (error) {
+      // Only show error if it's not a 401 (unauthorized) - user just needs to log in
+      if (error.response?.status !== 401) {
+        console.error('Error loading salary data:', error);
+        toast.error('Failed to load salary data');
       }
-    };
-    
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data on mount and when currency changes
+  useEffect(() => {
     loadData();
-  }, [userId]);
+  }, [userId, selectedCurrency]);
 
-  // Monthly rollover logic - REMOVED: Data is now in database, no need for localStorage rollover
+  // All calculations are done in the backend - just use summary values
+  const monthlyIncome = summary?.monthly_income || 0;
+  const yearlyIncome = summary?.ytd_income || 0;
+  const totalExpenses = summary?.total_expenses || 0;
+  const netSavings = summary?.available_money || 0;
+  const allDebts = summary?.total_debts || 0;
+  const allLoans = summary?.total_loans || 0;
 
-  // Helper function to calculate total efficiently
-  // Returns { amount: number in selected currency, isDirectSum: boolean }
-  const calculateTotal = (items, filterFn = () => true) => {
-    const filtered = items.filter(filterFn);
-    if (filtered.length === 0) return { amount: 0, isDirectSum: false };
-    
-    // Check if all items are in the same currency
-    const currencies = [...new Set(filtered.map(item => item.currency || 'USD'))];
-    const allSameCurrency = currencies.length === 1;
-    
-    // If all items are in the selected currency, sum directly
-    if (allSameCurrency && currencies[0] === selectedCurrency) {
-      const total = filtered.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-      return { amount: total, isDirectSum: true };
-    }
-    
-    // Otherwise, convert to USD first, then to selected currency
-    const totalInUSD = filtered.reduce((sum, item) => {
-      const amountInUSD = convertBetweenCurrencies(parseFloat(item.amount || 0), item.currency || 'USD', 'USD');
-      return sum + amountInUSD;
-    }, 0);
-    
-    // Convert from USD to selected currency
-    const totalInSelected = convertBetweenCurrencies(totalInUSD, 'USD', selectedCurrency);
-    return { amount: totalInSelected, isDirectSum: false };
-  };
-
-  // Calculate totals
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  
-  // Calculate monthly income
-  const monthlyIncomeResult = calculateTotal(incomes, (inc) => {
-    const date = new Date(inc.date);
-    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-  });
-  const monthlyIncome = monthlyIncomeResult.amount;
-  const monthlyIncomeIsDirect = monthlyIncomeResult.isDirectSum;
-
-  // Calculate yearly income
-  const yearlyIncomeResult = calculateTotal(incomes, (inc) => {
-    return new Date(inc.date).getFullYear() === currentYear;
-  });
-  const yearlyIncome = yearlyIncomeResult.amount;
-  const yearlyIncomeIsDirect = yearlyIncomeResult.isDirectSum;
-
-  // Calculate total expenses
-  const totalExpensesResult = calculateTotal(expenses, (exp) => {
-    const date = new Date(exp.date);
-    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-  });
-  // Add savings (convert to selected currency if needed)
-  // Savings is stored in USD, convert to selected currency
-  const savingsInSelected = convertBetweenCurrencies(savings, 'USD', selectedCurrency);
-  const totalExpenses = totalExpensesResult.amount + savingsInSelected;
-  // Expenses are mixed if savings is added (savings is always in USD)
-  const totalExpensesIsDirect = totalExpensesResult.isDirectSum && savings === 0;
-
-  // Helper function to get date from debt/loan (use date field if exists, otherwise infer from id)
-  const getDebtLoanDate = (item) => {
-    if (item.date) {
-      return new Date(item.date);
-    }
-    // For backward compatibility: use id timestamp to infer date
-    // id is Date.now(), so convert to date
-    return new Date(item.id);
-  };
-
-  // Calculate total debts and loans for display (all non-returned)
-  const allDebtsResult = calculateTotal(debts.filter(debt => !debt.returned));
-  const allDebts = allDebtsResult.amount;
-  const allDebtsIsDirect = allDebtsResult.isDirectSum;
-  
-  const allLoansResult = calculateTotal(loans.filter(loan => !loan.returned));
-  const allLoans = allLoansResult.amount;
-  const allLoansIsDirect = allLoansResult.isDirectSum;
-
-  // Helper function to check if returned in current month
-  const isReturnedInCurrentMonth = (item) => {
-    if (!item.returned || !item.returnedDate) return false;
-    const returnedDate = new Date(item.returnedDate);
-    return returnedDate.getMonth() === currentMonth && returnedDate.getFullYear() === currentYear;
-  };
-
-  // For Available Money calculation:
-  // - Debts from previous months that are NOT returned: Don't count (already accounted for in previous month)
-  // - Debts from current month that are NOT returned: ADD (you have this money)
-  // - Debts returned in current month: SUBTRACT (they paid it back, so you no longer have it)
-  const nonReturnedDebts = debts.filter(debt => {
-    const debtDate = getDebtLoanDate(debt);
-    const isFromCurrentMonth = debtDate.getMonth() === currentMonth && debtDate.getFullYear() === currentYear;
-    return isFromCurrentMonth && !debt.returned;
-  });
-  const returnedDebts = debts.filter(debt => isReturnedInCurrentMonth(debt));
-  
-  const nonReturnedDebtsResult = calculateTotal(nonReturnedDebts);
-  const returnedDebtsResult = calculateTotal(returnedDebts);
-  
-  // Loans: money you lent (you don't have this money, so it subtracts from available money)
-  // - Loans from previous months that are NOT returned: Don't count (already accounted for in previous month)
-  // - Loans from current month that are NOT returned: SUBTRACT (you don't have this money)
-  // - Loans returned in current month: ADD (you got the money back)
-  const nonReturnedLoans = loans.filter(loan => {
-    const loanDate = getDebtLoanDate(loan);
-    const isFromCurrentMonth = loanDate.getMonth() === currentMonth && loanDate.getFullYear() === currentYear;
-    return isFromCurrentMonth && !loan.returned;
-  });
-  const returnedLoans = loans.filter(loan => isReturnedInCurrentMonth(loan));
-  
-  const nonReturnedLoansResult = calculateTotal(nonReturnedLoans);
-  const returnedLoansResult = calculateTotal(returnedLoans);
-  
-  // Available Money = Income - Expenses + Debts (current month, not returned) - Debts (returned this month) - Loans (current month, not returned) + Loans (returned this month)
-  const netSavings = monthlyIncome - totalExpenses + nonReturnedDebtsResult.amount - returnedDebtsResult.amount - nonReturnedLoansResult.amount + returnedLoansResult.amount;
-
-  // Save functions - now using API
+  // Save functions - reload data and summary after changes
   const saveIncomes = async (newIncomes) => {
     setIncomes(newIncomes);
-    // Note: Individual items are saved via API in handlers
+    await loadData(); // Reload summary
   };
 
   const saveExpenses = async (newExpenses) => {
     setExpenses(newExpenses);
-    // Note: Individual items are saved via API in handlers
+    await loadData(); // Reload summary
   };
 
   const saveDebts = async (newDebts) => {
     setDebts(newDebts);
-    // Note: Individual items are saved via API in handlers
+    await loadData(); // Reload summary
   };
 
   const saveLoans = async (newLoans) => {
     setLoans(newLoans);
-    // Note: Individual items are saved via API in handlers
+    await loadData(); // Reload summary
   };
 
   const saveSavings = async (newSavings) => {
@@ -208,6 +103,7 @@ export default function SalarySection({ darkMode }) {
         amount: newSavings
       });
       setSavings(newSavings);
+      await loadData(); // Reload summary
     } catch (error) {
       console.error('Error saving savings:', error);
       toast.error('Failed to save savings');
@@ -236,17 +132,17 @@ export default function SalarySection({ darkMode }) {
       <div className="grid md:grid-cols-5 gap-6">
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>Monthly Income</p>
-          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(monthlyIncome, !monthlyIncomeIsDirect).display}</p>
+          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(monthlyIncome, false).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>This month</p>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>YTD Income</p>
-          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(yearlyIncome, !yearlyIncomeIsDirect).display}</p>
+          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(yearlyIncome, false).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>Year to date</p>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mb-2`}>Saved Money</p>
-          <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(savings).display}</p>
+          <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(summary?.savings || 0, false).display}</p>
           <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'} text-xs mt-2`}>Total saved</p>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
@@ -266,13 +162,13 @@ export default function SalarySection({ darkMode }) {
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <div className="flex justify-between items-center mb-4">
             <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm`}>Total Debts (Owed)</p>
-            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(allDebts, !allDebtsIsDirect).display}</p>
+            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(allDebts, false).display}</p>
           </div>
         </div>
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
           <div className="flex justify-between items-center mb-4">
             <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} text-sm`}>Total Loans (Lent)</p>
-            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(allLoans, !allLoansIsDirect).display}</p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(allLoans, false).display}</p>
           </div>
         </div>
       </div>
@@ -301,6 +197,7 @@ export default function SalarySection({ darkMode }) {
         onSave={saveDebts} 
         expenses={expenses}
         onSaveExpenses={saveExpenses}
+        onReload={loadData}
         showForm={showDebtForm} 
         setShowForm={setShowDebtForm}
         darkMode={darkMode} 
@@ -310,6 +207,7 @@ export default function SalarySection({ darkMode }) {
       <LoanManager 
         loans={loans} 
         onSave={saveLoans} 
+        onReload={loadData}
         showForm={showLoanForm} 
         setShowForm={setShowLoanForm}
         darkMode={darkMode}
@@ -320,6 +218,7 @@ export default function SalarySection({ darkMode }) {
       {/* Savings Section */}
       <SavingsManager 
         savings={savings} 
+        summary={summary}
         onSave={saveSavings} 
         showForm={showSavingsForm} 
         setShowForm={setShowSavingsForm}
@@ -361,6 +260,7 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
+      await loadData(); // Reload summary
       toast.success('Income added successfully');
     } catch (error) {
       console.error('Error adding income:', error);
@@ -376,6 +276,7 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
     try {
       await api.delete(`/api/salary/incomes/${id}/delete/?user_id=${userId}`);
       onSave(incomes.filter(inc => inc.id !== id));
+      await loadData(); // Reload summary
       toast.success('Income deleted successfully');
     } catch (error) {
       console.error('Error deleting income:', error);
@@ -682,6 +583,7 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
       setDate(new Date().toISOString().split('T')[0]);
       setExpenseCurrency('USD');
       setShowForm(false);
+      await loadData(); // Reload summary
       toast.success('Expense added successfully');
     } catch (error) {
       console.error('Error adding expense:', error);
@@ -697,6 +599,7 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
     try {
       await api.delete(`/api/salary/expenses/${id}/delete/?user_id=${userId}`);
       onSave(expenses.filter(exp => exp.id !== id));
+      await loadData(); // Reload summary
       toast.success('Expense deleted successfully');
     } catch (error) {
       console.error('Error deleting expense:', error);
@@ -871,7 +774,7 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
   );
 }
 
-function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setShowForm, darkMode }) {
+function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showForm, setShowForm, darkMode }) {
   const { currencies } = useCurrency();
   const [person, setPerson] = useState('');
   const [amount, setAmount] = useState('');
@@ -906,6 +809,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
       setDebtCurrency('USD');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
+      await loadData(); // Reload summary
       toast.success('Debt added successfully');
     } catch (error) {
       console.error('Error adding debt:', error);
@@ -921,6 +825,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
     try {
       await api.delete(`/api/salary/debts/${id}/delete/?user_id=${userId}`);
       onSave(debts.filter(debt => debt.id !== id));
+      await loadData(); // Reload summary
       toast.success('Debt deleted successfully');
     } catch (error) {
       console.error('Error deleting debt:', error);
@@ -1020,6 +925,10 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
             onSaveExpenses(expenses.map(exp => exp.id === existingExpense.id ? updateResponse.data : exp));
           }
         }
+      }
+      // Reload summary after all operations complete
+      if (onReload) {
+        await onReload();
       }
       toast.success(`Debt ${!isCurrentlyReturned ? 'marked as returned' : 'marked as not returned'}`);
     } catch (error) {
@@ -1230,7 +1139,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, showForm, setSho
   );
 }
 
-function LoanManager({ loans, onSave, showForm, setShowForm, darkMode, incomes, onSaveIncomes }) {
+function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode, incomes, onSaveIncomes }) {
   const { currencies } = useCurrency();
   const [person, setPerson] = useState('');
   const [amount, setAmount] = useState('');
@@ -1265,6 +1174,7 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode, incomes, 
       setLoanCurrency('USD');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
+      await loadData(); // Reload summary
       toast.success('Loan added successfully');
     } catch (error) {
       console.error('Error adding loan:', error);
@@ -1280,6 +1190,7 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode, incomes, 
     try {
       await api.delete(`/api/salary/loans/${id}/delete/?user_id=${userId}`);
       onSave(loans.filter(loan => loan.id !== id));
+      await loadData(); // Reload summary
       toast.success('Loan deleted successfully');
     } catch (error) {
       console.error('Error deleting loan:', error);
@@ -1380,6 +1291,10 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode, incomes, 
             onSaveIncomes(incomes.map(inc => inc.id === existingIncome.id ? updateResponse.data : inc));
           }
         }
+      }
+      // Reload summary after all operations complete
+      if (onReload) {
+        await onReload();
       }
       toast.success(`Loan ${!isCurrentlyReturned ? 'marked as returned' : 'marked as not returned'}`);
     } catch (error) {
@@ -1590,7 +1505,7 @@ function LoanManager({ loans, onSave, showForm, setShowForm, darkMode, incomes, 
   );
 }
 
-function SavingsManager({ savings, onSave, showForm, setShowForm, darkMode }) {
+function SavingsManager({ savings, summary, onSave, showForm, setShowForm, darkMode }) {
   const { formatCurrency } = useCurrency();
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1628,7 +1543,7 @@ function SavingsManager({ savings, onSave, showForm, setShowForm, darkMode }) {
 
       <div className="mb-4">
         <p className={`text-2xl font-bold text-indigo-600 dark:text-indigo-400`}>
-          {formatCurrency(savings).display}
+          {formatCurrency(summary?.savings || 0, false).display}
         </p>
         <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1`}>Current savings balance</p>
       </div>

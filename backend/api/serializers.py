@@ -151,11 +151,12 @@ class DebtSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
     
     def validate(self, data):
-        if 'person' not in data or not data['person']:
+        # Only validate fields that are being updated (for partial updates)
+        if 'person' in data and (not data['person'] or data['person'].strip() == ''):
             raise serializers.ValidationError({"person": "Person is required."})
-        if 'amount' not in data or data['amount'] <= 0:
+        if 'amount' in data and data['amount'] <= 0:
             raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
-        if 'date' not in data:
+        if 'date' in data and not data['date']:
             raise serializers.ValidationError({"date": "Date is required."})
         return data
 
@@ -167,11 +168,12 @@ class LoanSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
     
     def validate(self, data):
-        if 'person' not in data or not data['person']:
+        # Only validate fields that are being updated (for partial updates)
+        if 'person' in data and (not data['person'] or data['person'].strip() == ''):
             raise serializers.ValidationError({"person": "Person is required."})
-        if 'amount' not in data or data['amount'] <= 0:
+        if 'amount' in data and data['amount'] <= 0:
             raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
-        if 'date' not in data:
+        if 'date' in data and not data['date']:
             raise serializers.ValidationError({"date": "Date is required."})
         return data
 
