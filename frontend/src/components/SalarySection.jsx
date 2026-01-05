@@ -177,6 +177,7 @@ export default function SalarySection({ darkMode }) {
       <IncomeManager 
         incomes={incomes} 
         onSave={saveIncomes} 
+        onReload={loadData}
         showForm={showIncomeForm} 
         setShowForm={setShowIncomeForm}
         darkMode={darkMode} 
@@ -186,6 +187,7 @@ export default function SalarySection({ darkMode }) {
       <ExpenseManager 
         expenses={expenses} 
         onSave={saveExpenses} 
+        onReload={loadData}
         showForm={showExpenseForm} 
         setShowForm={setShowExpenseForm}
         darkMode={darkMode} 
@@ -260,7 +262,9 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Income added successfully');
     } catch (error) {
       console.error('Error adding income:', error);
@@ -276,7 +280,9 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
     try {
       await api.delete(`/api/salary/incomes/${id}/delete/?user_id=${userId}`);
       onSave(incomes.filter(inc => inc.id !== id));
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Income deleted successfully');
     } catch (error) {
       console.error('Error deleting income:', error);
@@ -551,7 +557,7 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
   );
 }
 
-function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
+function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, darkMode }) {
   const { currencies } = useCurrency();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -583,7 +589,9 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
       setDate(new Date().toISOString().split('T')[0]);
       setExpenseCurrency('USD');
       setShowForm(false);
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Expense added successfully');
     } catch (error) {
       console.error('Error adding expense:', error);
@@ -599,7 +607,9 @@ function ExpenseManager({ expenses, onSave, showForm, setShowForm, darkMode }) {
     try {
       await api.delete(`/api/salary/expenses/${id}/delete/?user_id=${userId}`);
       onSave(expenses.filter(exp => exp.id !== id));
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Expense deleted successfully');
     } catch (error) {
       console.error('Error deleting expense:', error);
@@ -809,7 +819,9 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
       setDebtCurrency('USD');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Debt added successfully');
     } catch (error) {
       console.error('Error adding debt:', error);
@@ -825,7 +837,9 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
     try {
       await api.delete(`/api/salary/debts/${id}/delete/?user_id=${userId}`);
       onSave(debts.filter(debt => debt.id !== id));
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Debt deleted successfully');
     } catch (error) {
       console.error('Error deleting debt:', error);
@@ -1174,7 +1188,9 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
       setLoanCurrency('USD');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Loan added successfully');
     } catch (error) {
       console.error('Error adding loan:', error);
@@ -1190,7 +1206,9 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
     try {
       await api.delete(`/api/salary/loans/${id}/delete/?user_id=${userId}`);
       onSave(loans.filter(loan => loan.id !== id));
-      await loadData(); // Reload summary
+      if (onReload) {
+        await onReload(); // Reload summary
+      }
       toast.success('Loan deleted successfully');
     } catch (error) {
       console.error('Error deleting loan:', error);
