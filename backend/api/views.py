@@ -23,31 +23,11 @@ from django.utils import timezone
 from django.db import IntegrityError
 from decimal import Decimal
 
-# Exchange rates (same as frontend)
-EXCHANGE_RATES = {
-    'USD': {'buy': 1, 'sell': 1},
-    'KGS': {'buy': 89.5, 'sell': 90.0},
-    'TJS': {'buy': 10.9, 'sell': 11.0}
-}
-
+# All amounts are stored and returned in USD
 def convert_between_currencies(amount, from_currency, to_currency):
-    """Convert amount from one currency to another"""
-    if from_currency == to_currency:
-        return float(amount)
-    
-    # First convert to USD (using sell rate if selling the fromCurrency)
-    if from_currency == 'USD':
-        amount_in_usd = float(amount)
-    else:
-        # Selling fromCurrency to get USD
-        amount_in_usd = float(amount) / EXCHANGE_RATES[from_currency]['sell']
-    
-    # Then convert from USD to toCurrency (using buy rate if buying toCurrency)
-    if to_currency == 'USD':
-        return amount_in_usd
-    else:
-        # Buying toCurrency with USD
-        return amount_in_usd * EXCHANGE_RATES[to_currency]['buy']
+    """Convert amount from one currency to another - always returns USD amount"""
+    # All amounts are stored in USD, so just return the amount
+    return float(amount)
 
 @api_view(['GET'])
 def health_check(request):
@@ -924,7 +904,11 @@ def salary_income_create(request):
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = IncomeSerializer(data=request.data)
+    # Ensure currency is USD
+    data = request.data.copy()
+    data['currency'] = 'USD'
+    
+    serializer = IncomeSerializer(data=data)
     if serializer.is_valid():
         income = serializer.save(user=user)
         return Response(IncomeSerializer(income).data, status=status.HTTP_201_CREATED)
@@ -948,8 +932,13 @@ def salary_income_update(request, income_id):
     except Income.DoesNotExist:
         return Response({'error': 'Income not found.'}, status=status.HTTP_404_NOT_FOUND)
     
+    # Ensure currency is USD
+    data = request.data.copy()
+    if 'currency' in data:
+        data['currency'] = 'USD'
+    
     partial = request.method == 'PATCH'
-    serializer = IncomeSerializer(income, data=request.data, partial=partial)
+    serializer = IncomeSerializer(income, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1010,7 +999,11 @@ def salary_expense_create(request):
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = ExpenseSerializer(data=request.data)
+    # Ensure currency is USD
+    data = request.data.copy()
+    data['currency'] = 'USD'
+    
+    serializer = ExpenseSerializer(data=data)
     if serializer.is_valid():
         expense = serializer.save(user=user)
         return Response(ExpenseSerializer(expense).data, status=status.HTTP_201_CREATED)
@@ -1034,8 +1027,13 @@ def salary_expense_update(request, expense_id):
     except Expense.DoesNotExist:
         return Response({'error': 'Expense not found.'}, status=status.HTTP_404_NOT_FOUND)
     
+    # Ensure currency is USD
+    data = request.data.copy()
+    if 'currency' in data:
+        data['currency'] = 'USD'
+    
     partial = request.method == 'PATCH'
-    serializer = ExpenseSerializer(expense, data=request.data, partial=partial)
+    serializer = ExpenseSerializer(expense, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1096,7 +1094,11 @@ def salary_debt_create(request):
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = DebtSerializer(data=request.data)
+    # Ensure currency is USD
+    data = request.data.copy()
+    data['currency'] = 'USD'
+    
+    serializer = DebtSerializer(data=data)
     if serializer.is_valid():
         debt = serializer.save(user=user)
         return Response(DebtSerializer(debt).data, status=status.HTTP_201_CREATED)
@@ -1124,6 +1126,9 @@ def salary_debt_update(request, debt_id):
     # Remove user_id from data before passing to serializer (it's not a model field)
     data = request.data.copy()
     data.pop('user_id', None)
+    # Ensure currency is USD
+    if 'currency' in data:
+        data['currency'] = 'USD'
     serializer = DebtSerializer(debt, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
@@ -1185,7 +1190,11 @@ def salary_loan_create(request):
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = LoanSerializer(data=request.data)
+    # Ensure currency is USD
+    data = request.data.copy()
+    data['currency'] = 'USD'
+    
+    serializer = LoanSerializer(data=data)
     if serializer.is_valid():
         loan = serializer.save(user=user)
         return Response(LoanSerializer(loan).data, status=status.HTTP_201_CREATED)
@@ -1213,6 +1222,9 @@ def salary_loan_update(request, loan_id):
     # Remove user_id from data before passing to serializer (it's not a model field)
     data = request.data.copy()
     data.pop('user_id', None)
+    # Ensure currency is USD
+    if 'currency' in data:
+        data['currency'] = 'USD'
     serializer = LoanSerializer(loan, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
@@ -1285,15 +1297,11 @@ def salary_savings_update(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def salary_summary(request):
-    """Get financial summary with all calculations done in backend"""
+    """Get financial summary with all calculations done in backend - all amounts in USD"""
     user_id = request.GET.get('user_id')
-    currency = request.GET.get('currency', 'USD')  # Default to USD if not provided
     
     if not user_id:
         return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    if currency not in EXCHANGE_RATES:
-        return Response({'error': 'Invalid currency.'}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
         user = User.objects.get(id=user_id)
@@ -1322,95 +1330,77 @@ def salary_summary(request):
             return False
         return item.returnedDate.month == current_month and item.returnedDate.year == current_year
     
-    # Calculate monthly income (current month)
-    monthly_income_usd = Decimal('0')
+    # Calculate monthly income (current month) - all amounts in USD
+    monthly_income = Decimal('0')
     for income in incomes:
         if is_current_month(income.date):
-            amount_usd = convert_between_currencies(income.amount, income.currency, 'USD')
-            monthly_income_usd += Decimal(str(amount_usd))
-    monthly_income = convert_between_currencies(float(monthly_income_usd), 'USD', currency)
+            monthly_income += Decimal(str(income.amount))
     
-    # Calculate YTD income
-    ytd_income_usd = Decimal('0')
+    # Calculate YTD income - all amounts in USD
+    ytd_income = Decimal('0')
     for income in incomes:
         if income.date.year == current_year:
-            amount_usd = convert_between_currencies(income.amount, income.currency, 'USD')
-            ytd_income_usd += Decimal(str(amount_usd))
-    ytd_income = convert_between_currencies(float(ytd_income_usd), 'USD', currency)
+            ytd_income += Decimal(str(income.amount))
     
     # Calculate total expenses (excluding "Returned debts" for netSavings calculation)
-    total_expenses_usd = Decimal('0')
-    returned_debts_expense_usd = Decimal('0')
+    total_expenses = Decimal('0')
+    returned_debts_expense = Decimal('0')
     for expense in expenses:
         if is_current_month(expense.date):
-            amount_usd = convert_between_currencies(expense.amount, expense.currency, 'USD')
             if expense.description == 'Returned debts':
-                returned_debts_expense_usd += Decimal(str(amount_usd))
+                returned_debts_expense += Decimal(str(expense.amount))
             else:
-                total_expenses_usd += Decimal(str(amount_usd))
+                total_expenses += Decimal(str(expense.amount))
     
     # Add savings (stored in USD)
-    savings_amount = float(savings_obj.amount)
-    total_expenses_usd += Decimal(str(savings_amount))
-    total_expenses = convert_between_currencies(float(total_expenses_usd), 'USD', currency)
-    returned_debts_expense = convert_between_currencies(float(returned_debts_expense_usd), 'USD', currency)
+    savings_amount = Decimal(str(savings_obj.amount))
+    total_expenses += savings_amount
     
     # Total expenses for display (including returned debts)
-    total_expenses_display = total_expenses + returned_debts_expense
+    total_expenses_display = float(total_expenses) + float(returned_debts_expense)
     
     # Calculate total debts (non-returned) for display
-    all_debts_usd = Decimal('0')
+    all_debts = Decimal('0')
     for debt in debts:
         if not debt.returned:
-            amount_usd = convert_between_currencies(debt.amount, debt.currency, 'USD')
-            all_debts_usd += Decimal(str(amount_usd))
-    all_debts = convert_between_currencies(float(all_debts_usd), 'USD', currency)
+            all_debts += Decimal(str(debt.amount))
     
     # Calculate total loans (non-returned) for display
-    all_loans_usd = Decimal('0')
+    all_loans = Decimal('0')
     for loan in loans:
         if not loan.returned:
-            amount_usd = convert_between_currencies(loan.amount, loan.currency, 'USD')
-            all_loans_usd += Decimal(str(amount_usd))
-    all_loans = convert_between_currencies(float(all_loans_usd), 'USD', currency)
+            all_loans += Decimal(str(loan.amount))
     
     # Calculate available money (netSavings)
     # Debts from current month that are NOT returned: ADD (you have this money)
-    non_returned_debts_usd = Decimal('0')
+    non_returned_debts = Decimal('0')
     for debt in debts:
         if is_current_month(debt.date) and not debt.returned:
-            amount_usd = convert_between_currencies(debt.amount, debt.currency, 'USD')
-            non_returned_debts_usd += Decimal(str(amount_usd))
-    non_returned_debts = convert_between_currencies(float(non_returned_debts_usd), 'USD', currency)
+            non_returned_debts += Decimal(str(debt.amount))
     
     # Loans from current month that are NOT returned: SUBTRACT (you don't have this money)
-    non_returned_loans_usd = Decimal('0')
+    non_returned_loans = Decimal('0')
     for loan in loans:
         if is_current_month(loan.date) and not loan.returned:
-            amount_usd = convert_between_currencies(loan.amount, loan.currency, 'USD')
-            non_returned_loans_usd += Decimal(str(amount_usd))
-    non_returned_loans = convert_between_currencies(float(non_returned_loans_usd), 'USD', currency)
+            non_returned_loans += Decimal(str(loan.amount))
     
     # Loans returned in current month: ADD (you got the money back)
-    returned_loans_usd = Decimal('0')
+    returned_loans = Decimal('0')
     for loan in loans:
         if is_returned_in_current_month(loan):
             # Only count loans from previous months
             if loan.date.month < current_month or loan.date.year < current_year:
-                amount_usd = convert_between_currencies(loan.amount, loan.currency, 'USD')
-                returned_loans_usd += Decimal(str(amount_usd))
-    returned_loans = convert_between_currencies(float(returned_loans_usd), 'USD', currency)
+                returned_loans += Decimal(str(loan.amount))
     
     # Available Money = Income - Expenses (including returned debts) + Debts (current month, not returned) - Loans (current month, not returned) + Loans (returned this month)
-    net_savings = monthly_income - total_expenses_display + non_returned_debts - non_returned_loans + returned_loans
+    net_savings = float(monthly_income) - total_expenses_display + float(non_returned_debts) - float(non_returned_loans) + float(returned_loans)
     
     return Response({
-        'monthly_income': round(monthly_income, 2),
-        'ytd_income': round(ytd_income, 2),
-        'total_expenses': round(total_expenses_display, 2),
-        'savings': round(convert_between_currencies(savings_amount, 'USD', currency), 2),
-        'available_money': round(net_savings, 2),
-        'total_debts': round(all_debts, 2),
-        'total_loans': round(all_loans, 2),
-        'currency': currency
+        'monthly_income': float(monthly_income),
+        'ytd_income': float(ytd_income),
+        'total_expenses': total_expenses_display,
+        'savings': float(savings_amount),
+        'available_money': net_savings,
+        'total_debts': float(all_debts),
+        'total_loans': float(all_loans)
     }, status=status.HTTP_200_OK)

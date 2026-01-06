@@ -4,7 +4,7 @@ import api from '../services/api';
 import { toast } from 'react-toastify';
 
 export default function SalarySection({ darkMode }) {
-  const { formatCurrency, currencies, currency: selectedCurrency } = useCurrency();
+  const { formatCurrency } = useCurrency();
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [debts, setDebts] = useState([]);
@@ -41,7 +41,7 @@ export default function SalarySection({ darkMode }) {
         api.get(`/api/salary/debts/?user_id=${userId}`),
         api.get(`/api/salary/loans/?user_id=${userId}`),
         api.get(`/api/salary/savings/?user_id=${userId}`),
-        api.get(`/api/salary/summary/?user_id=${userId}&currency=${selectedCurrency}`)
+        api.get(`/api/salary/summary/?user_id=${userId}`)
       ]);
       
       setIncomes(incomesRes.data || []);
@@ -61,10 +61,10 @@ export default function SalarySection({ darkMode }) {
     }
   };
 
-  // Load data on mount and when currency changes
+  // Load data on mount
   useEffect(() => {
     loadData();
-  }, [userId, selectedCurrency]);
+  }, [userId]);
 
   // All calculations are done in the backend - just use summary values
   const monthlyIncome = summary?.monthly_income || 0;
@@ -231,12 +231,11 @@ export default function SalarySection({ darkMode }) {
 }
 
 // Manager Components
-function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
-  const { currencies } = useCurrency();
+function IncomeManager({ incomes, onSave, onReload, showForm, setShowForm, darkMode }) {
+  const { formatCurrency } = useCurrency();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [incomeCurrency, setIncomeCurrency] = useState('USD');
   const [showAllIncomes, setShowAllIncomes] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -255,7 +254,7 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
         description,
         amount: parseFloat(amount),
         date,
-        currency: incomeCurrency
+        currency: 'USD'
       });
       onSave([...incomes, response.data]);
       setDescription('');
@@ -278,15 +277,19 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
     if (!userId) return;
     setLoading(true);
     try {
-      await api.delete(`/api/salary/incomes/${id}/delete/?user_id=${userId}`);
-      onSave(incomes.filter(inc => inc.id !== id));
-      if (onReload) {
-        await onReload(); // Reload summary
+      const response = await api.delete(`/api/salary/incomes/${id}/delete/?user_id=${userId}`);
+      // Only update state if API call succeeds
+      if (response.status === 200 || response.status === 204) {
+        onSave(incomes.filter(inc => inc.id !== id));
+        if (onReload) {
+          await onReload(); // Reload summary
+        }
+        toast.success('Income deleted successfully');
       }
-      toast.success('Income deleted successfully');
     } catch (error) {
       console.error('Error deleting income:', error);
-      toast.error(error.response?.data?.error || 'Failed to delete income');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to delete income');
+      // Don't update state if there's an error
     } finally {
       setLoading(false);
     }
@@ -356,12 +359,7 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
                     <div className="text-right">
                       <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Amount</p>
                       <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                        {(() => {
-                          const curr = income.currency || 'USD';
-                          const currInfo = currencies[curr];
-                          const formatted = parseFloat(income.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                          return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                        })()}
+                        {formatCurrency(parseFloat(income.amount), false).display}
                       </p>
                     </div>
                   </div>
@@ -442,12 +440,7 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
                       <div className="text-right">
                         <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Amount</p>
                         <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                          {(() => {
-                            const curr = income.currency || 'USD';
-                            const currInfo = currencies[curr];
-                            const formatted = parseFloat(income.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                            return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                          })()}
+                          {formatCurrency(parseFloat(income.amount), false).display}
                         </p>
                       </div>
                     </div>
@@ -509,21 +502,6 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
               </div>
               <div>
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Currency
-                </label>
-                <select
-                  value={incomeCurrency}
-                  onChange={(e) => setIncomeCurrency(e.target.value)}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  required
-                >
-                  {Object.values(currencies).map(curr => (
-                    <option key={curr.code} value={curr.code}>{curr.name} ({curr.code})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Date
                 </label>
           <input
@@ -558,11 +536,10 @@ function IncomeManager({ incomes, onSave, showForm, setShowForm, darkMode }) {
 }
 
 function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, darkMode }) {
-  const { currencies } = useCurrency();
+  const { formatCurrency } = useCurrency();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [expenseCurrency, setExpenseCurrency] = useState('USD');
   const [showAllExpenses, setShowAllExpenses] = useState(false);
   
   const DISPLAY_LIMIT = 4;
@@ -581,13 +558,12 @@ function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, dar
         description,
         amount: parseFloat(amount),
         date,
-        currency: expenseCurrency
+        currency: 'USD'
       });
       onSave([...expenses, response.data]);
       setDescription('');
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
-      setExpenseCurrency('USD');
       setShowForm(false);
       if (onReload) {
         await onReload(); // Reload summary
@@ -605,15 +581,19 @@ function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, dar
     if (!userId) return;
     setLoading(true);
     try {
-      await api.delete(`/api/salary/expenses/${id}/delete/?user_id=${userId}`);
-      onSave(expenses.filter(exp => exp.id !== id));
-      if (onReload) {
-        await onReload(); // Reload summary
+      const response = await api.delete(`/api/salary/expenses/${id}/delete/?user_id=${userId}`);
+      // Only update state if API call succeeds
+      if (response.status === 200 || response.status === 204) {
+        onSave(expenses.filter(exp => exp.id !== id));
+        if (onReload) {
+          await onReload(); // Reload summary
+        }
+        toast.success('Expense deleted successfully');
       }
-      toast.success('Expense deleted successfully');
     } catch (error) {
       console.error('Error deleting expense:', error);
-      toast.error(error.response?.data?.error || 'Failed to delete expense');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to delete expense');
+      // Don't update state if there's an error
     } finally {
       setLoading(false);
     }
@@ -656,16 +636,6 @@ function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, dar
             className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-red-500`}
             required
           />
-          <select
-            value={expenseCurrency}
-            onChange={(e) => setExpenseCurrency(e.target.value)}
-            className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-red-500`}
-            required
-          >
-            {Object.values(currencies).map(curr => (
-              <option key={curr.code} value={curr.code}>{curr.name} ({curr.code})</option>
-            ))}
-          </select>
           <input
             type="date"
             value={date}
@@ -692,12 +662,7 @@ function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, dar
               </div>
               <div className="flex items-center space-x-3">
                 <p className="text-sm font-bold text-red-600 dark:text-red-400">
-                  {(() => {
-                    const curr = expense.currency || 'USD';
-                    const currInfo = currencies[curr];
-                    const formatted = parseFloat(expense.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                  })()}
+                  {formatCurrency(parseFloat(expense.amount), false).display}
                 </p>
                 <button
                   onClick={() => handleDelete(expense.id)}
@@ -757,12 +722,7 @@ function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, dar
                   </div>
                   <div className="flex items-center space-x-3">
                     <p className="text-sm font-bold text-red-600 dark:text-red-400">
-                      {(() => {
-                        const curr = expense.currency || 'USD';
-                        const currInfo = currencies[curr];
-                        const formatted = parseFloat(expense.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                      })()}
+                        {formatCurrency(parseFloat(expense.amount), false).display}
                     </p>
                     <button
                       onClick={() => {
@@ -785,11 +745,10 @@ function ExpenseManager({ expenses, onSave, onReload, showForm, setShowForm, dar
 }
 
 function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showForm, setShowForm, darkMode }) {
-  const { currencies } = useCurrency();
+  const { formatCurrency } = useCurrency();
   const [person, setPerson] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [debtCurrency, setDebtCurrency] = useState('USD');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllDebts, setShowAllDebts] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -809,14 +768,13 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
         person,
         amount: parseFloat(amount),
         description: description || 'No description',
-        currency: debtCurrency,
+        currency: 'USD',
         date: date
       });
       onSave([...debts, response.data]);
       setPerson('');
       setAmount('');
       setDescription('');
-      setDebtCurrency('USD');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
       if (onReload) {
@@ -835,15 +793,19 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
     if (!userId) return;
     setLoading(true);
     try {
-      await api.delete(`/api/salary/debts/${id}/delete/?user_id=${userId}`);
-      onSave(debts.filter(debt => debt.id !== id));
-      if (onReload) {
-        await onReload(); // Reload summary
+      const response = await api.delete(`/api/salary/debts/${id}/delete/?user_id=${userId}`);
+      // Only update state if API call succeeds
+      if (response.status === 200 || response.status === 204) {
+        onSave(debts.filter(debt => debt.id !== id));
+        if (onReload) {
+          await onReload(); // Reload summary
+        }
+        toast.success('Debt deleted successfully');
       }
-      toast.success('Debt deleted successfully');
     } catch (error) {
       console.error('Error deleting debt:', error);
-      toast.error(error.response?.data?.error || 'Failed to delete debt');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to delete debt');
+      // Don't update state if there's an error
     } finally {
       setLoading(false);
     }
@@ -870,7 +832,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
       // Update local state
       onSave(debts.map(debt => debt.id === id ? response.data : debt));
 
-      const debtCurrency = debtToUpdate.currency || 'USD';
+      const debtCurrency = 'USD';
       const debtAmount = parseFloat(debtToUpdate.amount);
       
       if (!isCurrentlyReturned) {
@@ -884,7 +846,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
           return expense.description === 'Returned debts' &&
                  expenseDate.getMonth() === currentMonth &&
                  expenseDate.getFullYear() === currentYear &&
-                 (expense.currency || 'USD') === debtCurrency;
+                 (expense.currency || 'USD') === 'USD';
         });
         
         if (returnedDebtsExpenseIndex !== -1) {
@@ -903,7 +865,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
             description: 'Returned debts',
             amount: debtAmount,
             date: returnDate,
-            currency: debtCurrency
+            currency: 'USD'
           });
           onSaveExpenses([...expenses, newExpenseResponse.data]);
         }
@@ -918,7 +880,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
           return expense.description === 'Returned debts' &&
                  expenseDate.getMonth() === currentMonth &&
                  expenseDate.getFullYear() === currentYear &&
-                 (expense.currency || 'USD') === debtCurrency;
+                 (expense.currency || 'USD') === 'USD';
         });
         
         if (returnedDebtsExpenseIndex !== -1) {
@@ -984,16 +946,6 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
             className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-red-500`}
             required
           />
-          <select
-            value={debtCurrency}
-            onChange={(e) => setDebtCurrency(e.target.value)}
-            className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-red-500`}
-            required
-          >
-            {Object.values(currencies).map(curr => (
-              <option key={curr.code} value={curr.code}>{curr.name} ({curr.code})</option>
-            ))}
-          </select>
           <input
             type="date"
             value={date}
@@ -1034,12 +986,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
               </div>
               <div className="flex items-center space-x-3">
                 <p className={`text-sm font-bold ${debt.returned ? 'text-gray-500' : 'text-red-600 dark:text-red-400'}`}>
-                  {(() => {
-                    const curr = debt.currency || 'USD';
-                    const currInfo = currencies[curr];
-                    const formatted = parseFloat(debt.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                  })()}
+                    {formatCurrency(parseFloat(debt.amount), false).display}
                 </p>
                 <button
                   onClick={(e) => {
@@ -1116,12 +1063,7 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
                   </div>
                   <div className="flex items-center space-x-3">
                     <p className={`text-sm font-bold ${debt.returned ? 'text-gray-500' : 'text-red-600 dark:text-red-400'}`}>
-                      {(() => {
-                        const curr = debt.currency || 'USD';
-                        const currInfo = currencies[curr];
-                        const formatted = parseFloat(debt.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                      })()}
+                    {formatCurrency(parseFloat(debt.amount), false).display}
                     </p>
                     <button
                       onClick={(e) => {
@@ -1154,11 +1096,10 @@ function DebtManager({ debts, onSave, expenses, onSaveExpenses, onReload, showFo
 }
 
 function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode, incomes, onSaveIncomes }) {
-  const { currencies } = useCurrency();
+  const { formatCurrency } = useCurrency();
   const [person, setPerson] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [loanCurrency, setLoanCurrency] = useState('USD');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllLoans, setShowAllLoans] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1178,14 +1119,13 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
         person,
         amount: parseFloat(amount),
         description: description || 'No description',
-        currency: loanCurrency,
+        currency: 'USD',
         date: date
       });
       onSave([...loans, response.data]);
       setPerson('');
       setAmount('');
       setDescription('');
-      setLoanCurrency('USD');
       setDate(new Date().toISOString().split('T')[0]);
       setShowForm(false);
       if (onReload) {
@@ -1204,15 +1144,19 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
     if (!userId) return;
     setLoading(true);
     try {
-      await api.delete(`/api/salary/loans/${id}/delete/?user_id=${userId}`);
-      onSave(loans.filter(loan => loan.id !== id));
-      if (onReload) {
-        await onReload(); // Reload summary
+      const response = await api.delete(`/api/salary/loans/${id}/delete/?user_id=${userId}`);
+      // Only update state if API call succeeds
+      if (response.status === 200 || response.status === 204) {
+        onSave(loans.filter(loan => loan.id !== id));
+        if (onReload) {
+          await onReload(); // Reload summary
+        }
+        toast.success('Loan deleted successfully');
       }
-      toast.success('Loan deleted successfully');
     } catch (error) {
       console.error('Error deleting loan:', error);
-      toast.error(error.response?.data?.error || 'Failed to delete loan');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to delete loan');
+      // Don't update state if there's an error
     } finally {
       setLoading(false);
     }
@@ -1239,7 +1183,7 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
       // Update local state
       onSave(loans.map(loan => loan.id === id ? response.data : loan));
 
-      const loanCurrency = loanToUpdate.currency || 'USD';
+      const loanCurrency = 'USD';
       const loanAmount = parseFloat(loanToUpdate.amount);
       
       // Check if the loan was made in a previous month (not current month)
@@ -1258,7 +1202,7 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
           return income.description === 'Returned loans' &&
                  incomeDate.getMonth() === currentMonth &&
                  incomeDate.getFullYear() === currentYear &&
-                 (income.currency || 'USD') === loanCurrency;
+                 (income.currency || 'USD') === 'USD';
         });
         
         if (returnedLoansIncomeIndex !== -1) {
@@ -1277,7 +1221,7 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
             description: 'Returned loans',
             amount: loanAmount,
             date: returnDate,
-            currency: loanCurrency
+            currency: 'USD'
           });
           onSaveIncomes([...incomes, newIncomeResponse.data]);
         }
@@ -1288,7 +1232,7 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
           return income.description === 'Returned loans' &&
                  incomeDate.getMonth() === currentMonth &&
                  incomeDate.getFullYear() === currentYear &&
-                 (income.currency || 'USD') === loanCurrency;
+                 (income.currency || 'USD') === 'USD';
         });
         
         if (returnedLoansIncomeIndex !== -1) {
@@ -1354,16 +1298,6 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
             className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-amber-500`}
             required
           />
-          <select
-            value={loanCurrency}
-            onChange={(e) => setLoanCurrency(e.target.value)}
-            className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-amber-500`}
-            required
-          >
-            {Object.values(currencies).map(curr => (
-              <option key={curr.code} value={curr.code}>{curr.name} ({curr.code})</option>
-            ))}
-          </select>
           <input
             type="date"
             value={date}
@@ -1404,12 +1338,7 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
               </div>
               <div className="flex items-center space-x-3">
                 <p className={`text-sm font-bold ${loan.returned ? 'text-gray-500' : 'text-amber-600 dark:text-amber-400'}`}>
-                  {(() => {
-                    const curr = loan.currency || 'USD';
-                    const currInfo = currencies[curr];
-                    const formatted = parseFloat(loan.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                  })()}
+                    {formatCurrency(parseFloat(loan.amount), false).display}
                 </p>
                 <button
                   onClick={(e) => {
@@ -1486,12 +1415,7 @@ function LoanManager({ loans, onSave, onReload, showForm, setShowForm, darkMode,
                   </div>
                   <div className="flex items-center space-x-3">
                     <p className={`text-sm font-bold ${loan.returned ? 'text-gray-500' : 'text-amber-600 dark:text-amber-400'}`}>
-                      {(() => {
-                        const curr = loan.currency || 'USD';
-                        const currInfo = currencies[curr];
-                        const formatted = parseFloat(loan.amount).toLocaleString(currInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        return curr === 'USD' ? `${currInfo.symbol}${formatted}` : `${currInfo.symbol} ${formatted}`;
-                      })()}
+                    {formatCurrency(parseFloat(loan.amount), false).display}
                     </p>
                     <button
                       onClick={(e) => {

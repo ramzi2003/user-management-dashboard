@@ -275,8 +275,8 @@ export default function Dashboard() {
                   }`}
                   title="Change currency"
                 >
-                  <span className="text-sm font-medium">{currencies[currency].symbol}</span>
-                  <span className="text-xs">{currencies[currency].code}</span>
+                  <span className="text-sm font-medium">{currencies.USD?.symbol || '$'}</span>
+                  <span className="text-xs">{currencies.USD?.code || 'USD'}</span>
                 </button>
                 
                 {showCurrencyMenu && (

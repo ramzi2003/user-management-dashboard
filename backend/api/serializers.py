@@ -125,7 +125,15 @@ class IncomeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
         if 'date' not in data:
             raise serializers.ValidationError({"date": "Date is required."})
+        # Ensure currency is always USD
+        if 'currency' in data:
+            data['currency'] = 'USD'
         return data
+    
+    def create(self, validated_data):
+        # Force currency to USD
+        validated_data['currency'] = 'USD'
+        return super().create(validated_data)
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -141,7 +149,15 @@ class ExpenseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
         if 'date' not in data:
             raise serializers.ValidationError({"date": "Date is required."})
+        # Ensure currency is always USD
+        if 'currency' in data:
+            data['currency'] = 'USD'
         return data
+    
+    def create(self, validated_data):
+        # Force currency to USD
+        validated_data['currency'] = 'USD'
+        return super().create(validated_data)
 
 
 class DebtSerializer(serializers.ModelSerializer):
@@ -158,7 +174,15 @@ class DebtSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
         if 'date' in data and not data['date']:
             raise serializers.ValidationError({"date": "Date is required."})
+        # Ensure currency is always USD
+        if 'currency' in data:
+            data['currency'] = 'USD'
         return data
+    
+    def create(self, validated_data):
+        # Force currency to USD
+        validated_data['currency'] = 'USD'
+        return super().create(validated_data)
 
 
 class LoanSerializer(serializers.ModelSerializer):
@@ -175,7 +199,15 @@ class LoanSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"amount": "Amount must be greater than 0."})
         if 'date' in data and not data['date']:
             raise serializers.ValidationError({"date": "Date is required."})
+        # Ensure currency is always USD
+        if 'currency' in data:
+            data['currency'] = 'USD'
         return data
+    
+    def create(self, validated_data):
+        # Force currency to USD
+        validated_data['currency'] = 'USD'
+        return super().create(validated_data)
 
 
 class SavingsSerializer(serializers.ModelSerializer):
