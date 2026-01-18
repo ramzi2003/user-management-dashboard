@@ -19,7 +19,8 @@ RUN npm run build
 FROM nginx:alpine
 
 # Copy built files from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+# We serve the app under /personal-dashboard/, so place dist into a subfolder
+COPY --from=builder /app/dist /usr/share/nginx/html/personal-dashboard
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
