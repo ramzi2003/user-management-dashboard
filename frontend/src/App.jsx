@@ -34,7 +34,7 @@ function App() {
   return (
     <DarkModeProvider>
       <CurrencyProvider>
-        <Router>
+        <Router basename="/personal-dashboard">
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route 

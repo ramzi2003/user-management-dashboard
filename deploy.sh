@@ -47,7 +47,7 @@ if docker-compose ps | grep -q "Up"; then
     docker-compose ps
     echo ""
     echo "🌐 Access your application at:"
-    echo "   Frontend: http://your-server-ip:3001"
+    echo "   Frontend: http://your-server-ip:3001/personal-dashboard/"
     echo "   Backend API: http://your-server-ip:8081"
     echo ""
     echo "📝 View logs with: docker-compose logs -f"
