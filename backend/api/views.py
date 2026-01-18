@@ -1539,6 +1539,11 @@ def productivity_task_update(request, task_id):
     except Task.DoesNotExist:
         return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
     
+    old_title = task.title
+    old_time = task.scheduled_time
+    old_recurrence = task.recurrence
+    was_template = task.is_template
+
     # If marking as completed, set completed_at timestamp
     if request.data.get('completed') and not task.completed:
         task.completed_at = timezone.now()
@@ -1548,7 +1553,53 @@ def productivity_task_update(request, task_id):
     partial = request.method == 'PATCH'
     serializer = TaskSerializer(task, data=request.data, partial=partial)
     if serializer.is_valid():
-        serializer.save()
+        saved_task = serializer.save()
+
+        # Keep recurring templates in sync when editing today's task
+        # - If user edits a recurring instance, update the template so future days follow
+        # - If user changes recurrence to 'once', stop recurrence by deleting template
+        new_recurrence = request.data.get('recurrence', old_recurrence)
+
+        if not was_template:
+            if old_recurrence != 'once':
+                template_qs = Task.objects.filter(
+                    user=user,
+                    is_template=True,
+                    recurrence=old_recurrence,
+                    title=old_title,
+                    scheduled_time=old_time,
+                )
+                if new_recurrence == 'once':
+                    template_qs.delete()
+                else:
+                    template_qs.update(
+                        title=saved_task.title,
+                        scheduled_time=saved_task.scheduled_time,
+                        recurrence=new_recurrence,
+                        priority=saved_task.priority,
+                    )
+            else:
+                # Was one-time, now recurring -> create template if missing
+                if new_recurrence != 'once':
+                    exists = Task.objects.filter(
+                        user=user,
+                        is_template=True,
+                        recurrence=new_recurrence,
+                        title=saved_task.title,
+                        scheduled_time=saved_task.scheduled_time,
+                    ).exists()
+                    if not exists:
+                        Task.objects.create(
+                            user=user,
+                            title=saved_task.title,
+                            scheduled_time=saved_task.scheduled_time,
+                            date=timezone.now().date(),  # template date is not used
+                            priority=saved_task.priority,
+                            recurrence=new_recurrence,
+                            is_template=True,
+                            completed=False,
+                        )
+
         return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

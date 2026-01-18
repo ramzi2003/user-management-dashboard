@@ -227,7 +227,7 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = ['id', 'title', 'scheduled_time', 'date', 'completed', 'priority', 'recurrence', 'is_template', 'created_at', 'updated_at', 'completed_at']
-        read_only_fields = ['created_at', 'updated_at', 'completed_at']
+        read_only_fields = ['is_template', 'created_at', 'updated_at', 'completed_at']
     
     def validate(self, data):
         if 'title' in data and not data['title'].strip():

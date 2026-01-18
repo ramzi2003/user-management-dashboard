@@ -10,6 +10,9 @@ export default function Productivity() {
   const [monthlyPlans, setMonthlyPlans] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskDraft, setTaskDraft] = useState({ title: '', time: '09:00', recurrence: 'once' });
+
   const [newTask, setNewTask] = useState({ time: '09:00', title: '', recurrence: 'once' });
   const [newYearlyPlan, setNewYearlyPlan] = useState('');
   const [newMonthlyPlan, setNewMonthlyPlan] = useState('');
@@ -166,6 +169,55 @@ export default function Productivity() {
     }
   };
 
+  const startEditTask = (task) => {
+    setEditingTaskId(task.id);
+    setTaskDraft({
+      title: task.title,
+      time: task.time,
+      recurrence: task.recurrence || 'once',
+    });
+  };
+
+  const cancelEditTask = () => {
+    setEditingTaskId(null);
+    setTaskDraft({ title: '', time: '09:00', recurrence: 'once' });
+  };
+
+  const saveEditTask = async (id) => {
+    if (!taskDraft.title.trim()) {
+      toast.error('Task title cannot be empty');
+      return;
+    }
+
+    try {
+      const userId = getUserId();
+      const response = await api.patch(`/api/productivity/tasks/${id}/`, {
+        user_id: userId,
+        title: taskDraft.title.trim(),
+        scheduled_time: taskDraft.time,
+        recurrence: taskDraft.recurrence,
+      });
+
+      setTasks(tasks.map(t => (
+        t.id === id
+          ? {
+              ...t,
+              title: response.data.title,
+              time: response.data.scheduled_time.substring(0, 5),
+              recurrence: response.data.recurrence || 'once',
+            }
+          : t
+      )));
+
+      cancelEditTask();
+      fetchStats();
+      toast.success('Task updated');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error('Failed to update task');
+    }
+  };
+
   const deleteTask = async (id) => {
     const task = tasks.find(t => t.id === id);
     
@@ -308,22 +360,104 @@ export default function Productivity() {
                   onChange={() => toggleTask(task.id)}
                   className="w-5 h-5 cursor-pointer accent-blue-500"
                 />
-                <div className="flex-1 flex items-center space-x-2">
-                  <p className={`text-sm font-medium ${task.completed ? `line-through ${darkMode ? 'text-gray-500' : 'text-gray-500'}` : `${darkMode ? 'text-white' : 'text-gray-900'}`}`}>
-                    {task.title}
-                  </p>
-                  {task.recurrence && task.recurrence !== 'once' && (
-                    <span className={`text-xs px-2 py-0.5 rounded ${
-                      task.recurrence === 'daily' 
-                        ? darkMode ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'
-                        : darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'
-                    }`}>
-                      {task.recurrence === 'daily' ? '🔄 Daily' : '📅 Weekdays'}
-                    </span>
-                  )}
-                </div>
-                <span className={`text-xs font-semibold ${darkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'} px-2 py-1 rounded`}>{task.time}</span>
-                <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold`}>✕</button>
+                {editingTaskId === task.id ? (
+                  <>
+                    <div className="flex-1 space-y-2">
+                      <input
+                        value={taskDraft.title}
+                        onChange={(e) => setTaskDraft({ ...taskDraft, title: e.target.value })}
+                        className={`w-full px-3 py-2 rounded border text-sm outline-none ${
+                          darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="time"
+                          value={taskDraft.time}
+                          onChange={(e) => setTaskDraft({ ...taskDraft, time: e.target.value })}
+                          className={`px-3 py-2 rounded border text-sm outline-none ${
+                            darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        />
+                        <select
+                          value={taskDraft.recurrence}
+                          onChange={(e) => setTaskDraft({ ...taskDraft, recurrence: e.target.value })}
+                          className={`flex-1 px-3 py-2 rounded border text-sm outline-none ${
+                            darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        >
+                          <option value="once">Today only</option>
+                          <option value="daily">Daily</option>
+                          <option value="weekdays">Weekdays</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => saveEditTask(task.id)}
+                        className="px-3 py-2 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditTask}
+                        className={`px-3 py-2 text-xs font-semibold rounded ${
+                          darkMode ? 'bg-gray-600 hover:bg-gray-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                        }`}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => startEditTask(task)}
+                      className={`flex-1 text-left text-sm font-medium ${
+                        task.completed ? `line-through ${darkMode ? 'text-gray-500' : 'text-gray-500'}` : `${darkMode ? 'text-white' : 'text-gray-900'}`
+                      }`}
+                      title="Click to edit"
+                    >
+                      {task.title}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => startEditTask(task)}
+                      className={`text-xs font-semibold px-2 py-1 rounded ${
+                        darkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'
+                      }`}
+                      title="Click to edit time"
+                    >
+                      {task.time}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => startEditTask(task)}
+                      className={`text-xs px-2 py-1 rounded ${
+                        task.recurrence === 'daily'
+                          ? darkMode ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'
+                          : task.recurrence === 'weekdays'
+                            ? darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700'
+                            : darkMode ? 'bg-gray-800 text-gray-300' : 'bg-gray-200 text-gray-700'
+                      }`}
+                      title="Click to edit recurrence"
+                    >
+                      {task.recurrence === 'daily'
+                        ? 'Daily'
+                        : task.recurrence === 'weekdays'
+                          ? 'Weekdays'
+                          : 'Today'}
+                    </button>
+
+                    <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold`}>✕</button>
+                  </>
+                )}
               </div>
             ))}
           </div>
