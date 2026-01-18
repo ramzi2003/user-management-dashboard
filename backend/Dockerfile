@@ -27,6 +27,7 @@ RUN python manage.py collectstatic --noinput || true
 # Create entrypoint script (outside /app so bind-mounts won't overwrite it)
 RUN echo '#!/bin/sh\n\
 set -e\n\
+mkdir -p /app/cache\n\
 python manage.py migrate --noinput\n\
 python manage.py collectstatic --noinput\n\
 exec gunicorn backend.wsgi:application --bind 0.0.0.0:8080 --workers 3 --timeout 120' > /entrypoint.sh
