@@ -24,14 +24,15 @@ COPY . .
 # Collect static files
 RUN python manage.py collectstatic --noinput || true
 
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
+# Create entrypoint script (outside /app so bind-mounts won't overwrite it)
+RUN echo '#!/bin/sh\n\
+set -e\n\
 python manage.py migrate --noinput\n\
 python manage.py collectstatic --noinput\n\
-exec gunicorn backend.wsgi:application --bind 0.0.0.0:8080 --workers 3' > /app/entrypoint.sh
+exec gunicorn backend.wsgi:application --bind 0.0.0.0:8080 --workers 3 --timeout 120' > /entrypoint.sh
 
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
