@@ -126,3 +126,78 @@ class Savings(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.amount}"
+
+
+# Productivity Models
+class Task(models.Model):
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ]
+    
+    RECURRENCE_CHOICES = [
+        ('once', 'One-time'),
+        ('daily', 'Daily'),
+        ('weekdays', 'Weekdays'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks')
+    title = models.CharField(max_length=500)
+    scheduled_time = models.TimeField()
+    date = models.DateField()
+    completed = models.BooleanField(default=False)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    recurrence = models.CharField(max_length=10, choices=RECURRENCE_CHOICES, default='once')
+    is_template = models.BooleanField(default=False)  # True if this is the recurring template
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['date', 'scheduled_time']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['user', 'completed']),
+            models.Index(fields=['user', 'is_template']),
+        ]
+    
+    def __str__(self):
+        return f"{self.title} - {self.date}"
+
+
+class YearlyPlan(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='yearly_plans')
+    title = models.TextField()
+    year = models.IntegerField()
+    completed = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'year']),
+        ]
+    
+    def __str__(self):
+        return f"{self.year} - {self.title}"
+
+
+class MonthlyPlan(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='monthly_plans')
+    title = models.TextField()
+    year = models.IntegerField()
+    month = models.IntegerField()
+    completed = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'year', 'month']),
+        ]
+    
+    def __str__(self):
+        return f"{self.year}-{self.month:02d} - {self.title}"

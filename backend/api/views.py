@@ -6,7 +6,8 @@ from rest_framework.authtoken.models import Token
 from .serializers import (
     SignUpSerializer, EmailVerificationSerializer, LoginSerializer, 
     LakawonClassSerializer, LakawonDeductionSerializer,
-    IncomeSerializer, ExpenseSerializer, DebtSerializer, LoanSerializer, SavingsSerializer
+    IncomeSerializer, ExpenseSerializer, DebtSerializer, LoanSerializer, SavingsSerializer,
+    TaskSerializer, YearlyPlanSerializer, MonthlyPlanSerializer
 )
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
@@ -17,7 +18,7 @@ import string
 from django.core.cache import cache
 import requests
 import json
-from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings
+from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings, Task, YearlyPlan, MonthlyPlan
 from datetime import datetime, date, timedelta
 from django.utils import timezone
 from django.db import IntegrityError
@@ -1403,4 +1404,403 @@ def salary_summary(request):
         'available_money': net_savings,
         'total_debts': float(all_debts),
         'total_loans': float(all_loans)
+    }, status=status.HTTP_200_OK)
+
+
+# Productivity API Views
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def productivity_tasks(request):
+    """Get all tasks for the user with optional date filter"""
+    user_id = request.GET.get('user_id')
+    task_date = request.GET.get('date')  # Format: YYYY-MM-DD
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    today = timezone.now().date()
+    target_date = today
+    
+    if task_date:
+        try:
+            target_date = datetime.strptime(task_date, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Automatically delete old one-time incomplete tasks (older than today)
+    Task.objects.filter(user=user, date__lt=today, completed=False, recurrence='once').delete()
+    
+    # Delete very old completed tasks (older than 30 days) to keep database clean
+    thirty_days_ago = today - timedelta(days=30)
+    Task.objects.filter(user=user, date__lt=thirty_days_ago, recurrence='once').delete()
+    
+    # Create recurring tasks for target_date if they don't exist
+    templates = Task.objects.filter(user=user, is_template=True)
+    
+    for template in templates:
+        # Check if task already exists for target_date
+        existing = Task.objects.filter(
+            user=user,
+            title=template.title,
+            scheduled_time=template.scheduled_time,
+            date=target_date,
+            is_template=False
+        ).exists()
+        
+        if not existing:
+            # Check if we should create this task based on recurrence
+            should_create = False
+            
+            if template.recurrence == 'daily':
+                should_create = True
+            elif template.recurrence == 'weekdays':
+                # 0=Monday, 6=Sunday
+                should_create = target_date.weekday() < 5
+            
+            if should_create:
+                Task.objects.create(
+                    user=user,
+                    title=template.title,
+                    scheduled_time=template.scheduled_time,
+                    date=target_date,
+                    priority=template.priority,
+                    recurrence=template.recurrence,
+                    is_template=False,
+                    completed=False
+                )
+    
+    # Get tasks for the target date (exclude templates)
+    tasks = Task.objects.filter(user=user, is_template=False)
+    
+    if task_date or not task_date:  # Always filter by date when getting tasks
+        tasks = tasks.filter(date=target_date)
+    
+    serializer = TaskSerializer(tasks, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def productivity_task_create(request):
+    """Create a new task"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    recurrence = request.data.get('recurrence', 'once')
+    
+    # If recurring task, create a template
+    if recurrence != 'once':
+        # Create template (for future recurring instances)
+        Task.objects.create(
+            user=user,
+            title=request.data.get('title'),
+            scheduled_time=request.data.get('scheduled_time'),
+            date=timezone.now().date(),  # Template date (not really used)
+            priority=request.data.get('priority', 'medium'),
+            recurrence=recurrence,
+            is_template=True,
+            completed=False
+        )
+    
+    # Create the actual task instance for today
+    serializer = TaskSerializer(data=request.data)
+    if serializer.is_valid():
+        task = serializer.save(user=user, is_template=False)
+        return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def productivity_task_update(request, task_id):
+    """Update a task"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        task = Task.objects.get(id=task_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # If marking as completed, set completed_at timestamp
+    if request.data.get('completed') and not task.completed:
+        task.completed_at = timezone.now()
+    elif not request.data.get('completed') and task.completed:
+        task.completed_at = None
+    
+    partial = request.method == 'PATCH'
+    serializer = TaskSerializer(task, data=request.data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def productivity_task_delete(request, task_id):
+    """Delete a task"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        task = Task.objects.get(id=task_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # If this is a recurring task instance, also delete its template to stop recurrence
+    if task.recurrence != 'once' and not task.is_template:
+        Task.objects.filter(
+            user=user,
+            title=task.title,
+            scheduled_time=task.scheduled_time,
+            is_template=True,
+            recurrence=task.recurrence
+        ).delete()
+    
+    task.delete()
+    return Response({'message': 'Task deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def productivity_yearly_plans(request):
+    """Get all yearly plans for the user"""
+    user_id = request.GET.get('user_id')
+    year = request.GET.get('year')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    plans = YearlyPlan.objects.filter(user=user)
+    
+    if year:
+        try:
+            plans = plans.filter(year=int(year))
+        except ValueError:
+            return Response({'error': 'Invalid year format.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    serializer = YearlyPlanSerializer(plans, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def productivity_yearly_plan_create(request):
+    """Create a new yearly plan"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = YearlyPlanSerializer(data=request.data)
+    if serializer.is_valid():
+        plan = serializer.save(user=user)
+        return Response(YearlyPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def productivity_yearly_plan_delete(request, plan_id):
+    """Delete a yearly plan"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        plan = YearlyPlan.objects.get(id=plan_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except YearlyPlan.DoesNotExist:
+        return Response({'error': 'Plan not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    plan.delete()
+    return Response({'message': 'Yearly plan deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def productivity_monthly_plans(request):
+    """Get all monthly plans for the user"""
+    user_id = request.GET.get('user_id')
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    plans = MonthlyPlan.objects.filter(user=user)
+    
+    if year:
+        try:
+            plans = plans.filter(year=int(year))
+        except ValueError:
+            return Response({'error': 'Invalid year format.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if month:
+        try:
+            plans = plans.filter(month=int(month))
+        except ValueError:
+            return Response({'error': 'Invalid month format.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    serializer = MonthlyPlanSerializer(plans, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def productivity_monthly_plan_create(request):
+    """Create a new monthly plan"""
+    user_id = request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = MonthlyPlanSerializer(data=request.data)
+    if serializer.is_valid():
+        plan = serializer.save(user=user)
+        return Response(MonthlyPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def productivity_monthly_plan_delete(request, plan_id):
+    """Delete a monthly plan"""
+    user_id = request.GET.get('user_id') or request.data.get('user_id')
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+        plan = MonthlyPlan.objects.get(id=plan_id, user=user)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except MonthlyPlan.DoesNotExist:
+        return Response({'error': 'Plan not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    plan.delete()
+    return Response({'message': 'Monthly plan deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def productivity_stats(request):
+    """Get productivity statistics - weekly and monthly trends"""
+    user_id = request.GET.get('user_id')
+    start_date = request.GET.get('start_date')  # For weekly stats
+    year = request.GET.get('year')  # For monthly stats
+    month = request.GET.get('month')  # For monthly stats
+    
+    if not user_id:
+        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Calculate weekly stats (last 7 days from start_date or today)
+    if start_date:
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        start = timezone.now().date() - timedelta(days=6)
+    
+    weekly_data = []
+    for i in range(7):
+        day = start + timedelta(days=i)
+        tasks = Task.objects.filter(user=user, date=day)
+        total = tasks.count()
+        completed = tasks.filter(completed=True).count()
+        percentage = round((completed / total * 100) if total > 0 else 0)
+        weekly_data.append(percentage)
+    
+    # Calculate monthly stats (4 weeks or 12 weeks)
+    if year and month:
+        try:
+            year_val = int(year)
+            month_val = int(month)
+        except ValueError:
+            return Response({'error': 'Invalid year or month format.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate for each week of the month (simplified to 4 weeks)
+        month_start = date(year_val, month_val, 1)
+        monthly_data = []
+        
+        for week in range(4):
+            week_start = month_start + timedelta(weeks=week)
+            week_end = week_start + timedelta(days=6)
+            
+            tasks = Task.objects.filter(user=user, date__gte=week_start, date__lte=week_end)
+            total = tasks.count()
+            completed = tasks.filter(completed=True).count()
+            percentage = round((completed / total * 100) if total > 0 else 0)
+            monthly_data.append(percentage)
+    else:
+        # Default: last 12 weeks
+        monthly_data = []
+        today = timezone.now().date()
+        
+        for week in range(12):
+            week_start = today - timedelta(weeks=11 - week)
+            week_end = week_start + timedelta(days=6)
+            
+            tasks = Task.objects.filter(user=user, date__gte=week_start, date__lte=week_end)
+            total = tasks.count()
+            completed = tasks.filter(completed=True).count()
+            percentage = round((completed / total * 100) if total > 0 else 0)
+            monthly_data.append(percentage)
+    
+    return Response({
+        'weekly_data': weekly_data,
+        'monthly_data': monthly_data
     }, status=status.HTTP_200_OK)

@@ -26,6 +26,7 @@ import { useDarkMode } from '../contexts/DarkModeContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import SalarySection from '../components/SalarySection';
 import Lakawon from '../components/Lakawon';
+import Productivity from '../components/Productivity';
 import api from '../services/api';
 
 export default function Dashboard() {
@@ -163,7 +164,7 @@ export default function Dashboard() {
       finance: <FinanceSection darkMode={darkMode} />,
       salary: <SalarySection darkMode={darkMode} />,
       health: <HealthSection darkMode={darkMode} />,
-      productivity: <ProductivitySection darkMode={darkMode} />,
+      productivity: <Productivity />,
       social: <SocialSection darkMode={darkMode} />,
       travel: <TravelSection darkMode={darkMode} />,
       books: <BooksSection darkMode={darkMode} />,
@@ -552,31 +553,7 @@ function HealthSection({ darkMode }) {
   );
 }
 
-function ProductivitySection({ darkMode }) {
-  return (
-    <div className="space-y-6">
-      <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Productivity Tools</h1>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
-          <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Today's Tasks</h3>
-          <div className="space-y-2">
-            <TaskItem title="Complete project report" completed={true} dueDate="Today" darkMode={darkMode} />
-            <TaskItem title="Team meeting at 2 PM" completed={false} dueDate="Today" darkMode={darkMode} />
-            <TaskItem title="Review email responses" completed={false} dueDate="Today" darkMode={darkMode} />
-          </div>
-        </div>
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
-          <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Upcoming Deadlines</h3>
-          <div className="space-y-3">
-            <DeadlineItem title="Q4 Report" days={5} darkMode={darkMode} />
-            <DeadlineItem title="Project Presentation" days={12} darkMode={darkMode} />
-            <DeadlineItem title="Annual Review" days={20} darkMode={darkMode} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ProductivitySection is now imported from ../components/Productivity.jsx
 
 function SocialSection({ darkMode }) {
   return (

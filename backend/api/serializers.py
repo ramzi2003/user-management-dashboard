@@ -77,7 +77,7 @@ class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True, style={'input_type': 'password'})
 
-from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings
+from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings, Task, YearlyPlan, MonthlyPlan
 
 class LakawonClassSerializer(serializers.ModelSerializer):
     class Meta:
@@ -219,4 +219,53 @@ class SavingsSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if 'amount' not in data or data['amount'] < 0:
             raise serializers.ValidationError({"amount": "Amount cannot be negative."})
+        return data
+
+
+# Productivity Serializers
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['id', 'title', 'scheduled_time', 'date', 'completed', 'priority', 'recurrence', 'is_template', 'created_at', 'updated_at', 'completed_at']
+        read_only_fields = ['created_at', 'updated_at', 'completed_at']
+    
+    def validate(self, data):
+        if 'title' in data and not data['title'].strip():
+            raise serializers.ValidationError({"title": "Title cannot be empty."})
+        if 'scheduled_time' not in data and self.instance is None:
+            raise serializers.ValidationError({"scheduled_time": "Scheduled time is required."})
+        if 'date' not in data and self.instance is None:
+            raise serializers.ValidationError({"date": "Date is required."})
+        return data
+
+
+class YearlyPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = YearlyPlan
+        fields = ['id', 'title', 'year', 'completed', 'order', 'created_at']
+        read_only_fields = ['created_at']
+    
+    def validate(self, data):
+        if 'title' in data and not data['title'].strip():
+            raise serializers.ValidationError({"title": "Title cannot be empty."})
+        if 'year' not in data and self.instance is None:
+            raise serializers.ValidationError({"year": "Year is required."})
+        return data
+
+
+class MonthlyPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MonthlyPlan
+        fields = ['id', 'title', 'year', 'month', 'completed', 'order', 'created_at']
+        read_only_fields = ['created_at']
+    
+    def validate(self, data):
+        if 'title' in data and not data['title'].strip():
+            raise serializers.ValidationError({"title": "Title cannot be empty."})
+        if 'year' not in data and self.instance is None:
+            raise serializers.ValidationError({"year": "Year is required."})
+        if 'month' not in data and self.instance is None:
+            raise serializers.ValidationError({"month": "Month is required."})
+        if 'month' in data and (data['month'] < 1 or data['month'] > 12):
+            raise serializers.ValidationError({"month": "Month must be between 1 and 12."})
         return data

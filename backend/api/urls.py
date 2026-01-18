@@ -42,5 +42,17 @@ urlpatterns = [
     path('salary/savings/', views.salary_savings, name='salary_savings'),
     path('salary/savings/update/', views.salary_savings_update, name='salary_savings_update'),
     path('salary/summary/', views.salary_summary, name='salary_summary'),
+    # Productivity endpoints
+    path('productivity/tasks/', views.productivity_tasks, name='productivity_tasks'),
+    path('productivity/tasks/create/', views.productivity_task_create, name='productivity_task_create'),
+    path('productivity/tasks/<int:task_id>/', views.productivity_task_update, name='productivity_task_update'),
+    path('productivity/tasks/<int:task_id>/delete/', views.productivity_task_delete, name='productivity_task_delete'),
+    path('productivity/yearly-plans/', views.productivity_yearly_plans, name='productivity_yearly_plans'),
+    path('productivity/yearly-plans/create/', views.productivity_yearly_plan_create, name='productivity_yearly_plan_create'),
+    path('productivity/yearly-plans/<int:plan_id>/delete/', views.productivity_yearly_plan_delete, name='productivity_yearly_plan_delete'),
+    path('productivity/monthly-plans/', views.productivity_monthly_plans, name='productivity_monthly_plans'),
+    path('productivity/monthly-plans/create/', views.productivity_monthly_plan_create, name='productivity_monthly_plan_create'),
+    path('productivity/monthly-plans/<int:plan_id>/delete/', views.productivity_monthly_plan_delete, name='productivity_monthly_plan_delete'),
+    path('productivity/stats/', views.productivity_stats, name='productivity_stats'),
 ]
 
