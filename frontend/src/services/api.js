@@ -1,7 +1,8 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  // Use same-origin. Nginx will proxy /api to the backend container.
+  baseURL: '',
   headers: {
     'Content-Type': 'application/json',
   },
