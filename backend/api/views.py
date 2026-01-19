@@ -1807,6 +1807,7 @@ def productivity_stats(request):
         start = timezone.now().date() - timedelta(days=6)
     
     weekly_data = []
+    weekly_dates = []
     for i in range(7):
         day = start + timedelta(days=i)
         tasks = Task.objects.filter(user=user, date=day)
@@ -1814,9 +1815,37 @@ def productivity_stats(request):
         completed = tasks.filter(completed=True).count()
         percentage = round((completed / total * 100) if total > 0 else 0)
         weekly_data.append(percentage)
+        weekly_dates.append(day.isoformat())
     
-    # Calculate monthly stats (4 weeks or 12 weeks)
-    if year and month:
+    # Calculate monthly stats
+    # - If year is provided without month: return 12 months (Jan..Dec) for that year
+    # - If year+month are provided: return 4 week buckets for that month (W1..W4)
+    # - Else: return last 12 weeks (W1..W12)
+    monthly_labels = []
+
+    if year and not month:
+        try:
+            year_val = int(year)
+        except ValueError:
+            return Response({'error': 'Invalid year format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Month abbreviations (English) to avoid locale surprises
+        monthly_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        monthly_data = []
+
+        import calendar
+        for m in range(1, 13):
+            month_start = date(year_val, m, 1)
+            last_day = calendar.monthrange(year_val, m)[1]
+            month_end = date(year_val, m, last_day)
+
+            tasks = Task.objects.filter(user=user, date__gte=month_start, date__lte=month_end)
+            total = tasks.count()
+            completed = tasks.filter(completed=True).count()
+            percentage = round((completed / total * 100) if total > 0 else 0)
+            monthly_data.append(percentage)
+
+    elif year and month:
         try:
             year_val = int(year)
             month_val = int(month)
@@ -1826,6 +1855,7 @@ def productivity_stats(request):
         # Calculate for each week of the month (simplified to 4 weeks)
         month_start = date(year_val, month_val, 1)
         monthly_data = []
+        monthly_labels = ['W1', 'W2', 'W3', 'W4']
         
         for week in range(4):
             week_start = month_start + timedelta(weeks=week)
@@ -1839,6 +1869,7 @@ def productivity_stats(request):
     else:
         # Default: last 12 weeks
         monthly_data = []
+        monthly_labels = [f'W{i}' for i in range(1, 13)]
         today = timezone.now().date()
         
         for week in range(12):
@@ -1853,5 +1884,8 @@ def productivity_stats(request):
     
     return Response({
         'weekly_data': weekly_data,
+        'weekly_dates': weekly_dates,
         'monthly_data': monthly_data
+        ,
+        'monthly_labels': monthly_labels,
     }, status=status.HTTP_200_OK)

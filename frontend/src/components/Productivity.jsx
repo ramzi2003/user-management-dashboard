@@ -17,13 +17,44 @@ export default function Productivity() {
   const [newYearlyPlan, setNewYearlyPlan] = useState('');
   const [newMonthlyPlan, setNewMonthlyPlan] = useState('');
   const [weeklyData, setWeeklyData] = useState([45, 62, 55, 78, 68, 85, 70]);
+  const [weeklyLabels, setWeeklyLabels] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const [monthlyData, setMonthlyData] = useState([60, 65, 70, 72, 75, 78, 80, 82, 85, 87, 89, 91]);
+  const [monthlyLabels, setMonthlyLabels] = useState(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const today = new Date();
-  const currentMonth = monthNames[today.getMonth()];
-  const currentYear = today.getFullYear();
-  const currentMonthNum = today.getMonth() + 1;
+  const BISHKEK_TZ = 'Asia/Bishkek';
+  const now = new Date();
+
+  const getYmdInTz = (dateObj) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: BISHKEK_TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(dateObj);
+    const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+    return `${map.year}-${map.month}-${map.day}`;
+  };
+
+  const getMonthYearInTz = (dateObj) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: BISHKEK_TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(dateObj);
+    const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+    return { year: Number(map.year), monthNum: Number(map.month) };
+  };
+
+  const sortTasksByTime = (arr) => {
+    // 'HH:MM' string compares correctly
+    return [...arr].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  };
+
+  const { year: currentYear, monthNum: currentMonthNum } = getMonthYearInTz(now);
+  const currentMonth = monthNames[currentMonthNum - 1];
+  const bishkekTodayStr = getYmdInTz(now);
 
   const completedTasks = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;
@@ -61,8 +92,7 @@ export default function Productivity() {
   const fetchTasks = async () => {
     try {
       const userId = getUserId();
-      const todayStr = today.toISOString().split('T')[0];
-      const response = await api.get(`/api/productivity/tasks/?user_id=${userId}&date=${todayStr}`);
+      const response = await api.get(`/api/productivity/tasks/?user_id=${userId}&date=${bishkekTodayStr}`);
       
       const formattedTasks = response.data.map(task => ({
         id: task.id.toString(),
@@ -72,7 +102,7 @@ export default function Productivity() {
         recurrence: task.recurrence || 'once'
       }));
       
-      setTasks(formattedTasks);
+      setTasks(sortTasksByTime(formattedTasks));
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
@@ -104,9 +134,26 @@ export default function Productivity() {
   const fetchStats = async () => {
     try {
       const userId = getUserId();
-      const response = await api.get(`/api/productivity/stats/?user_id=${userId}&year=${currentYear}&month=${currentMonthNum}`);
-      setWeeklyData(response.data.weekly_data || weeklyData);
-      setMonthlyData(response.data.monthly_data || monthlyData);
+      const response = await api.get(`/api/productivity/stats/?user_id=${userId}&year=${currentYear}`);
+
+      if (Array.isArray(response.data.weekly_data)) {
+        setWeeklyData(response.data.weekly_data);
+      }
+      if (Array.isArray(response.data.weekly_dates)) {
+        const labels = response.data.weekly_dates.map((ymd) => {
+          // Parse ISO date as UTC midnight then format in Bishkek
+          const d = new Date(`${ymd}T00:00:00Z`);
+          return new Intl.DateTimeFormat('en-US', { timeZone: BISHKEK_TZ, weekday: 'short' }).format(d);
+        });
+        setWeeklyLabels(labels);
+      }
+
+      if (Array.isArray(response.data.monthly_data)) {
+        setMonthlyData(response.data.monthly_data);
+      }
+      if (Array.isArray(response.data.monthly_labels) && response.data.monthly_labels.length) {
+        setMonthlyLabels(response.data.monthly_labels);
+      }
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -120,13 +167,12 @@ export default function Productivity() {
 
     try {
       const userId = getUserId();
-      const todayStr = today.toISOString().split('T')[0];
       
       const response = await api.post('/api/productivity/tasks/create/', {
         user_id: userId,
         title: newTask.title,
         scheduled_time: newTask.time,
-        date: todayStr,
+        date: bishkekTodayStr,
         completed: false,
         recurrence: newTask.recurrence
       });
@@ -139,7 +185,7 @@ export default function Productivity() {
         recurrence: response.data.recurrence
       };
 
-      setTasks([...tasks, formattedTask]);
+      setTasks(sortTasksByTime([...tasks, formattedTask]));
       setNewTask({ time: '09:00', title: '', recurrence: 'once' });
       
       const recurrenceLabel = newTask.recurrence === 'once' ? '' : 
@@ -207,7 +253,7 @@ export default function Productivity() {
               recurrence: response.data.recurrence || 'once',
             }
           : t
-      )));
+      )).sort((a, b) => (a.time || '').localeCompare(b.time || '')));
 
       cancelEditTask();
       fetchStats();
@@ -582,7 +628,7 @@ export default function Productivity() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Weekly Productivity */}
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border shadow-sm transition-colors duration-300`}>
-          <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Weekly Productivity</h3>
+          <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Last 7 Days Productivity</h3>
           <div className="flex gap-2">
             {/* Y-axis */}
             <div className="flex flex-col justify-between h-40 text-xs text-right pr-2">
@@ -594,15 +640,15 @@ export default function Productivity() {
             </div>
             {/* Chart */}
             <div className="flex-1 flex items-end justify-between h-40 gap-2">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => (
-                <div key={day} className="flex flex-col items-center flex-1">
+              {(weeklyLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).map((dayLabel, i) => (
+                <div key={`${dayLabel}-${i}`} className="flex flex-col items-center flex-1">
                   <div className="relative w-full flex flex-col items-center">
                     <span className={`text-xs font-semibold mb-1 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                       {weeklyData[i]}%
                     </span>
                     <div className="w-full bg-gradient-to-b from-blue-400 to-blue-500 rounded-t" style={{ height: `${(weeklyData[i] / 100) * 120}px` }}></div>
                   </div>
-                  <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-2 font-medium`}>{day}</p>
+                  <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-2 font-medium`}>{dayLabel}</p>
                 </div>
               ))}
             </div>
@@ -612,7 +658,7 @@ export default function Productivity() {
 
         {/* Monthly Productivity */}
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border shadow-sm transition-colors duration-300`}>
-          <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Monthly Productivity Trend</h3>
+          <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>{currentYear} Productivity by Month</h3>
           <div className="flex gap-2">
             {/* Y-axis */}
             <div className="flex flex-col justify-between h-40 text-xs text-right pr-2">
@@ -623,20 +669,29 @@ export default function Productivity() {
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>0%</span>
             </div>
             {/* Chart */}
-            <div className="flex-1 flex items-end justify-between h-40 gap-1">
+            <div className="flex-1">
+              <div className="flex items-end justify-between h-40 gap-1">
               {monthlyData.map((value, i) => (
                 <div key={i} className="flex-1 relative group">
                   <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className={`text-xs font-semibold ${darkMode ? 'text-emerald-300' : 'text-emerald-700'} whitespace-nowrap`}>
-                      {value}%
+                      {(monthlyLabels[i] || `M${i + 1}`)}: {value}%
                     </span>
                   </div>
                   <div className="w-full bg-gradient-to-b from-emerald-400 to-emerald-500 rounded-t hover:opacity-80 transition" style={{ height: `${(value / 100) * 120}px` }}></div>
                 </div>
               ))}
+              </div>
+              <div className="flex justify-between gap-1 mt-2">
+                {monthlyData.map((_, i) => (
+                  <div key={`label-${i}`} className={`flex-1 text-center text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {monthlyLabels[i] || `M${i + 1}`}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-4 text-center`}>Trend: Improving productivity throughout the month (Hover to see values)</p>
+          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-4 text-center`}>Hover a bar to see the exact percent.</p>
         </div>
       </div>
     </div>

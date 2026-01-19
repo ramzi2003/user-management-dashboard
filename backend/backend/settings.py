@@ -117,7 +117,8 @@ AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Bishkek (Kyrgyzstan) timezone for correct day/week calculations
+TIME_ZONE = 'Asia/Bishkek'
 
 USE_I18N = True
 
