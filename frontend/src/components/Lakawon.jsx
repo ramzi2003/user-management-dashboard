@@ -388,7 +388,7 @@ export default function Lakawon({ darkMode }) {
       {/* Header */}
       <div className="flex items-center space-x-4 mb-6">
         <img 
-          src="/lakawon-icon.jpg" 
+          src={`${import.meta.env.BASE_URL}lakawon-icon.jpg`} 
           alt="Lakawon" 
           className="w-16 h-16 rounded-full object-cover"
         />

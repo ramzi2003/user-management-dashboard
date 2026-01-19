@@ -689,19 +689,13 @@ function UtilitiesSection({ darkMode, setActiveSection }) {
         >
           <div className="text-4xl mb-3">
             <img 
-              src="/lakawon-icon.jpg" 
+              src={`${import.meta.env.BASE_URL}lakawon-icon.jpg`} 
               alt="Lakawon" 
               className="w-10 h-10 rounded-full object-cover"
             />
           </div>
           <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Lakawon</p>
         </div>
-        <UtilityCard title="Unit Converter" icon="⚙️" darkMode={darkMode} />
-        <UtilityCard title="QR Generator" icon="📱" darkMode={darkMode} />
-        <UtilityCard title="Text Tools" icon="📝" darkMode={darkMode} />
-        <UtilityCard title="Password Generator" icon="🔐" darkMode={darkMode} />
-        <UtilityCard title="JSON Formatter" icon="{ }" darkMode={darkMode} />
-        <UtilityCard title="Calculator" icon="🧮" darkMode={darkMode} />
       </div>
     </div>
   );
