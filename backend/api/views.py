@@ -24,6 +24,24 @@ from django.utils import timezone
 from django.db import IntegrityError
 from decimal import Decimal
 
+# Security helper:
+# - All authenticated endpoints must use request.user (from TokenAuthentication)
+# - If the client sends user_id anyway, we only accept it when it matches request.user.id
+def _authed_user_or_error(request):
+    user = getattr(request, 'user', None)
+    incoming_user_id = (
+        getattr(request, 'query_params', {}).get('user_id')
+        or request.GET.get('user_id')
+        or request.data.get('user_id')
+    )
+    if incoming_user_id:
+        try:
+            if int(incoming_user_id) != user.id:
+                return None, Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return None, Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
+    return user, None
+
 # All amounts are stored and returned in USD
 def convert_between_currencies(amount, from_currency, to_currency):
     """Convert amount from one currency to another - always returns USD amount"""
@@ -373,21 +391,17 @@ def google_oauth(request):
 
 # Lakawon API Views
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def lakawon_classes(request):
     """Get all Lakawon classes for the user"""
+    user = request.user
     user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Get optional filter parameters
     month = request.GET.get('month')  # Format: YYYY-MM
@@ -416,21 +430,17 @@ def lakawon_classes(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def lakawon_class_create(request):
     """Create a new Lakawon class"""
+    user = request.user
     user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Create serializer with user
     serializer = LakawonClassSerializer(data=request.data)
@@ -447,22 +457,20 @@ def lakawon_class_create(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
 def lakawon_class_update(request, class_id):
     """Update a Lakawon class"""
+    user = request.user
     user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        user = User.objects.get(id=user_id)
         class_obj = LakawonClass.objects.get(id=class_id, user=user)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
     except LakawonClass.DoesNotExist:
         return Response({
             'error': 'Class not found.'
@@ -477,22 +485,20 @@ def lakawon_class_update(request, class_id):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
 def lakawon_class_delete(request, class_id):
     """Delete a Lakawon class and associated deduction if cancelled"""
+    user = request.user
     user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        user = User.objects.get(id=user_id)
         class_obj = LakawonClass.objects.get(id=class_id, user=user)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
     except LakawonClass.DoesNotExist:
         return Response({
             'error': 'Class not found.'
@@ -524,21 +530,17 @@ def lakawon_class_delete(request, class_id):
     }, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def lakawon_salary_summary(request):
     """Get salary summary for the two payment periods"""
+    user = request.user
     user_id = request.GET.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Get optional year and month parameters
     year = request.GET.get('year')
@@ -672,21 +674,17 @@ def lakawon_salary_summary(request):
 
 # Deduction API Views
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def lakawon_deductions(request):
     """Get all Lakawon deductions for the user"""
+    user = request.user
     user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Get optional filter parameters
     month = request.GET.get('month')  # Format: YYYY-MM
@@ -716,21 +714,17 @@ def lakawon_deductions(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def lakawon_deduction_create(request):
     """Create a new Lakawon deduction"""
+    user = request.user
     user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     
     serializer = LakawonDeductionSerializer(data=request.data)
     if serializer.is_valid():
@@ -741,22 +735,20 @@ def lakawon_deduction_create(request):
 
 
 @api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
 def lakawon_deduction_update(request, deduction_id):
     """Update a Lakawon deduction"""
+    user = request.user
     user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        user = User.objects.get(id=user_id)
         deduction = LakawonDeduction.objects.get(id=deduction_id, user=user)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
     except LakawonDeduction.DoesNotExist:
         return Response({
             'error': 'Deduction not found.'
@@ -772,22 +764,20 @@ def lakawon_deduction_update(request, deduction_id):
 
 
 @api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
 def lakawon_deduction_delete(request, deduction_id):
     """Delete a Lakawon deduction and associated cancelled class"""
+    user = request.user
     user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        user = User.objects.get(id=user_id)
         deduction = LakawonDeduction.objects.get(id=deduction_id, user=user)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
     except LakawonDeduction.DoesNotExist:
         return Response({
             'error': 'Deduction not found.'
@@ -822,16 +812,19 @@ def lakawon_deduction_delete(request, deduction_id):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def lakawon_class_cancel(request, class_id):
     """Cancel a Lakawon class - marks it as cancelled and creates a deduction"""
+    user = request.user
     user_id = request.data.get('user_id')
     student_name = request.data.get('student_name')
     reason = request.data.get('reason', 'Class cancelled')
-    
-    if not user_id:
-        return Response({
-            'error': 'User ID is required.'
-        }, status=status.HTTP_400_BAD_REQUEST)
+    if user_id:
+        try:
+            if int(user_id) != user.id:
+                return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     
     if not student_name:
         return Response({
@@ -839,12 +832,7 @@ def lakawon_class_cancel(request, class_id):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        user = User.objects.get(id=user_id)
         class_obj = LakawonClass.objects.get(id=class_id, user=user)
-    except User.DoesNotExist:
-        return Response({
-            'error': 'User not found.'
-        }, status=status.HTTP_404_NOT_FOUND)
     except LakawonClass.DoesNotExist:
         return Response({
             'error': 'Class not found.'
@@ -876,15 +864,9 @@ def lakawon_class_cancel(request, class_id):
 @permission_classes([IsAuthenticated])
 def salary_incomes(request):
     """Get all incomes for the user"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     incomes = Income.objects.filter(user=user)
     serializer = IncomeSerializer(incomes, many=True)
@@ -895,18 +877,13 @@ def salary_incomes(request):
 @permission_classes([IsAuthenticated])
 def salary_income_create(request):
     """Create a new income"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     # Ensure currency is USD
     data = request.data.copy()
+    data.pop('user_id', None)
     data['currency'] = 'USD'
     
     serializer = IncomeSerializer(data=data)
@@ -920,21 +897,18 @@ def salary_income_create(request):
 @permission_classes([IsAuthenticated])
 def salary_income_update(request, income_id):
     """Update an income"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         income = Income.objects.get(id=income_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Income.DoesNotExist:
         return Response({'error': 'Income not found.'}, status=status.HTTP_404_NOT_FOUND)
     
     # Ensure currency is USD
     data = request.data.copy()
+    data.pop('user_id', None)
     if 'currency' in data:
         data['currency'] = 'USD'
     
@@ -950,16 +924,12 @@ def salary_income_update(request, income_id):
 @permission_classes([IsAuthenticated])
 def salary_income_delete(request, income_id):
     """Delete an income"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         income = Income.objects.get(id=income_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Income.DoesNotExist:
         return Response({'error': 'Income not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -971,15 +941,9 @@ def salary_income_delete(request, income_id):
 @permission_classes([IsAuthenticated])
 def salary_expenses(request):
     """Get all expenses for the user"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     expenses = Expense.objects.filter(user=user)
     serializer = ExpenseSerializer(expenses, many=True)
@@ -990,18 +954,13 @@ def salary_expenses(request):
 @permission_classes([IsAuthenticated])
 def salary_expense_create(request):
     """Create a new expense"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     # Ensure currency is USD
     data = request.data.copy()
+    data.pop('user_id', None)
     data['currency'] = 'USD'
     
     serializer = ExpenseSerializer(data=data)
@@ -1015,21 +974,18 @@ def salary_expense_create(request):
 @permission_classes([IsAuthenticated])
 def salary_expense_update(request, expense_id):
     """Update an expense"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         expense = Expense.objects.get(id=expense_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Expense.DoesNotExist:
         return Response({'error': 'Expense not found.'}, status=status.HTTP_404_NOT_FOUND)
     
     # Ensure currency is USD
     data = request.data.copy()
+    data.pop('user_id', None)
     if 'currency' in data:
         data['currency'] = 'USD'
     
@@ -1045,16 +1001,12 @@ def salary_expense_update(request, expense_id):
 @permission_classes([IsAuthenticated])
 def salary_expense_delete(request, expense_id):
     """Delete an expense"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         expense = Expense.objects.get(id=expense_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Expense.DoesNotExist:
         return Response({'error': 'Expense not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1066,15 +1018,9 @@ def salary_expense_delete(request, expense_id):
 @permission_classes([IsAuthenticated])
 def salary_debts(request):
     """Get all debts for the user"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     debts = Debt.objects.filter(user=user)
     serializer = DebtSerializer(debts, many=True)
@@ -1085,18 +1031,13 @@ def salary_debts(request):
 @permission_classes([IsAuthenticated])
 def salary_debt_create(request):
     """Create a new debt"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     # Ensure currency is USD
     data = request.data.copy()
+    data.pop('user_id', None)
     data['currency'] = 'USD'
     
     serializer = DebtSerializer(data=data)
@@ -1110,16 +1051,12 @@ def salary_debt_create(request):
 @permission_classes([IsAuthenticated])
 def salary_debt_update(request, debt_id):
     """Update a debt"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         debt = Debt.objects.get(id=debt_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Debt.DoesNotExist:
         return Response({'error': 'Debt not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1141,16 +1078,12 @@ def salary_debt_update(request, debt_id):
 @permission_classes([IsAuthenticated])
 def salary_debt_delete(request, debt_id):
     """Delete a debt"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         debt = Debt.objects.get(id=debt_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Debt.DoesNotExist:
         return Response({'error': 'Debt not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1162,15 +1095,9 @@ def salary_debt_delete(request, debt_id):
 @permission_classes([IsAuthenticated])
 def salary_loans(request):
     """Get all loans for the user"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     loans = Loan.objects.filter(user=user)
     serializer = LoanSerializer(loans, many=True)
@@ -1181,18 +1108,13 @@ def salary_loans(request):
 @permission_classes([IsAuthenticated])
 def salary_loan_create(request):
     """Create a new loan"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     # Ensure currency is USD
     data = request.data.copy()
+    data.pop('user_id', None)
     data['currency'] = 'USD'
     
     serializer = LoanSerializer(data=data)
@@ -1206,16 +1128,12 @@ def salary_loan_create(request):
 @permission_classes([IsAuthenticated])
 def salary_loan_update(request, loan_id):
     """Update a loan"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         loan = Loan.objects.get(id=loan_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Loan.DoesNotExist:
         return Response({'error': 'Loan not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1237,16 +1155,12 @@ def salary_loan_update(request, loan_id):
 @permission_classes([IsAuthenticated])
 def salary_loan_delete(request, loan_id):
     """Delete a loan"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         loan = Loan.objects.get(id=loan_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Loan.DoesNotExist:
         return Response({'error': 'Loan not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1258,37 +1172,29 @@ def salary_loan_delete(request, loan_id):
 @permission_classes([IsAuthenticated])
 def salary_savings(request):
     """Get savings for the user"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-        savings, created = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
-        serializer = SavingsSerializer(savings)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    savings, created = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
+    serializer = SavingsSerializer(savings)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def salary_savings_update(request):
     """Update savings for the user"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-        savings, created = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    savings, created = Savings.objects.get_or_create(user=user, defaults={'amount': 0.00})
     
     partial = request.method == 'PATCH'
-    serializer = SavingsSerializer(savings, data=request.data, partial=partial)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = SavingsSerializer(savings, data=data, partial=partial)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1299,15 +1205,9 @@ def salary_savings_update(request):
 @permission_classes([IsAuthenticated])
 def salary_summary(request):
     """Get financial summary with all calculations done in backend - all amounts in USD"""
-    user_id = request.GET.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     # Get current month and year
     now = timezone.now()
@@ -1412,16 +1312,13 @@ def salary_summary(request):
 @permission_classes([IsAuthenticated])
 def productivity_tasks(request):
     """Get all tasks for the user with optional date filter"""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     user_id = request.GET.get('user_id')
     task_date = request.GET.get('date')  # Format: YYYY-MM-DD
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    # (user_id is optional now; token decides the user)
     
     today = timezone.now().date()
     target_date = today
@@ -1488,15 +1385,9 @@ def productivity_tasks(request):
 @permission_classes([IsAuthenticated])
 def productivity_task_create(request):
     """Create a new task"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
     recurrence = request.data.get('recurrence', 'once')
     
@@ -1515,7 +1406,9 @@ def productivity_task_create(request):
         )
     
     # Create the actual task instance for today
-    serializer = TaskSerializer(data=request.data)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = TaskSerializer(data=data)
     if serializer.is_valid():
         task = serializer.save(user=user, is_template=False)
         return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
@@ -1526,16 +1419,12 @@ def productivity_task_create(request):
 @permission_classes([IsAuthenticated])
 def productivity_task_update(request, task_id):
     """Update a task"""
-    user_id = request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         task = Task.objects.get(id=task_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Task.DoesNotExist:
         return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1551,7 +1440,9 @@ def productivity_task_update(request, task_id):
         task.completed_at = None
     
     partial = request.method == 'PATCH'
-    serializer = TaskSerializer(task, data=request.data, partial=partial)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = TaskSerializer(task, data=data, partial=partial)
     if serializer.is_valid():
         saved_task = serializer.save()
 
@@ -1608,16 +1499,12 @@ def productivity_task_update(request, task_id):
 @permission_classes([IsAuthenticated])
 def productivity_task_delete(request, task_id):
     """Delete a task"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         task = Task.objects.get(id=task_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Task.DoesNotExist:
         return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1639,16 +1526,13 @@ def productivity_task_delete(request, task_id):
 @permission_classes([IsAuthenticated])
 def productivity_yearly_plans(request):
     """Get all yearly plans for the user"""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     user_id = request.GET.get('user_id')
     year = request.GET.get('year')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    # (user_id is optional now; token decides the user)
     
     plans = YearlyPlan.objects.filter(user=user)
     
@@ -1666,17 +1550,13 @@ def productivity_yearly_plans(request):
 @permission_classes([IsAuthenticated])
 def productivity_yearly_plan_create(request):
     """Create a new yearly plan"""
-    user_id = request.data.get('user_id')
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-    
-    serializer = YearlyPlanSerializer(data=request.data)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = YearlyPlanSerializer(data=data)
     if serializer.is_valid():
         plan = serializer.save(user=user)
         return Response(YearlyPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
@@ -1687,16 +1567,12 @@ def productivity_yearly_plan_create(request):
 @permission_classes([IsAuthenticated])
 def productivity_yearly_plan_delete(request, plan_id):
     """Delete a yearly plan"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         plan = YearlyPlan.objects.get(id=plan_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except YearlyPlan.DoesNotExist:
         return Response({'error': 'Plan not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1708,17 +1584,14 @@ def productivity_yearly_plan_delete(request, plan_id):
 @permission_classes([IsAuthenticated])
 def productivity_monthly_plans(request):
     """Get all monthly plans for the user"""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     user_id = request.GET.get('user_id')
     year = request.GET.get('year')
     month = request.GET.get('month')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    # (user_id is optional now; token decides the user)
     
     plans = MonthlyPlan.objects.filter(user=user)
     
@@ -1742,17 +1615,13 @@ def productivity_monthly_plans(request):
 @permission_classes([IsAuthenticated])
 def productivity_monthly_plan_create(request):
     """Create a new monthly plan"""
-    user_id = request.data.get('user_id')
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
     
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-    
-    serializer = MonthlyPlanSerializer(data=request.data)
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = MonthlyPlanSerializer(data=data)
     if serializer.is_valid():
         plan = serializer.save(user=user)
         return Response(MonthlyPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
@@ -1763,16 +1632,12 @@ def productivity_monthly_plan_create(request):
 @permission_classes([IsAuthenticated])
 def productivity_monthly_plan_delete(request, plan_id):
     """Delete a monthly plan"""
-    user_id = request.GET.get('user_id') or request.data.get('user_id')
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     try:
-        user = User.objects.get(id=user_id)
         plan = MonthlyPlan.objects.get(id=plan_id, user=user)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except MonthlyPlan.DoesNotExist:
         return Response({'error': 'Plan not found.'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1784,18 +1649,15 @@ def productivity_monthly_plan_delete(request, plan_id):
 @permission_classes([IsAuthenticated])
 def productivity_stats(request):
     """Get productivity statistics - weekly and monthly trends"""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
     user_id = request.GET.get('user_id')
     start_date = request.GET.get('start_date')  # For weekly stats
     year = request.GET.get('year')  # For monthly stats
     month = request.GET.get('month')  # For monthly stats
-    
-    if not user_id:
-        return Response({'error': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+    # (user_id is optional now; token decides the user)
     
     # Calculate weekly stats (last 7 days from start_date or today)
     if start_date:
