@@ -48,8 +48,15 @@ export default function Productivity() {
   };
 
   const sortTasksByTime = (arr) => {
-    // 'HH:MM' string compares correctly
-    return [...arr].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    // Times first (ascending), then unspecified
+    return [...arr].sort((a, b) => {
+      const aHasTime = !!a.time;
+      const bHasTime = !!b.time;
+      if (aHasTime && bHasTime) return a.time.localeCompare(b.time); // 'HH:MM' compares correctly
+      if (aHasTime && !bHasTime) return -1;
+      if (!aHasTime && bHasTime) return 1;
+      return 0;
+    });
   };
 
   const { year: currentYear, monthNum: currentMonthNum } = getMonthYearInTz(now);
@@ -96,7 +103,7 @@ export default function Productivity() {
       
       const formattedTasks = response.data.map(task => ({
         id: task.id.toString(),
-        time: task.scheduled_time.substring(0, 5), // HH:MM
+        time: task.scheduled_time ? task.scheduled_time.substring(0, 5) : '', // HH:MM or unspecified
         title: task.title,
         completed: task.completed,
         recurrence: task.recurrence || 'once'
@@ -159,6 +166,19 @@ export default function Productivity() {
     }
   };
 
+  const updateTodayWeeklyPercent = (todayTasks) => {
+    const total = todayTasks.length;
+    const completed = todayTasks.filter(t => t.completed).length;
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    setWeeklyData((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) return [percent];
+      const next = [...prev];
+      next[next.length - 1] = percent;
+      return next;
+    });
+  };
+
   const addTask = async () => {
     if (!newTask.title.trim()) {
       toast.error('Please enter a task title');
@@ -171,7 +191,7 @@ export default function Productivity() {
       const response = await api.post('/api/productivity/tasks/create/', {
         user_id: userId,
         title: newTask.title,
-        scheduled_time: newTask.time,
+        scheduled_time: newTask.time || null,
         date: bishkekTodayStr,
         completed: false,
         recurrence: newTask.recurrence
@@ -179,14 +199,19 @@ export default function Productivity() {
 
       const formattedTask = {
         id: response.data.id.toString(),
-        time: response.data.scheduled_time.substring(0, 5),
+        time: response.data.scheduled_time ? response.data.scheduled_time.substring(0, 5) : '',
         title: response.data.title,
         completed: response.data.completed,
         recurrence: response.data.recurrence
       };
 
-      setTasks(sortTasksByTime([...tasks, formattedTask]));
+      setTasks((prev) => {
+        const next = sortTasksByTime([...prev, formattedTask]);
+        updateTodayWeeklyPercent(next);
+        return next;
+      });
       setNewTask({ time: '09:00', title: '', recurrence: 'once' });
+      fetchStats();
       
       const recurrenceLabel = newTask.recurrence === 'once' ? '' : 
                              newTask.recurrence === 'daily' ? ' (Daily)' : ' (Weekdays)';
@@ -208,7 +233,13 @@ export default function Productivity() {
         completed: !task.completed
       });
 
-      setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+      const newCompleted = !task.completed;
+      setTasks((prev) => {
+        const next = prev.map(t => (t.id === id ? { ...t, completed: newCompleted } : t));
+        updateTodayWeeklyPercent(next);
+        return next;
+      });
+      fetchStats();
     } catch (error) {
       console.error('Error toggling task:', error);
       toast.error('Failed to update task');
@@ -240,20 +271,20 @@ export default function Productivity() {
       const response = await api.patch(`/api/productivity/tasks/${id}/`, {
         user_id: userId,
         title: taskDraft.title.trim(),
-        scheduled_time: taskDraft.time,
+        scheduled_time: taskDraft.time || null,
         recurrence: taskDraft.recurrence,
       });
 
-      setTasks(tasks.map(t => (
+      setTasks(sortTasksByTime(tasks.map(t => (
         t.id === id
           ? {
               ...t,
               title: response.data.title,
-              time: response.data.scheduled_time.substring(0, 5),
+              time: response.data.scheduled_time ? response.data.scheduled_time.substring(0, 5) : '',
               recurrence: response.data.recurrence || 'once',
             }
           : t
-      )).sort((a, b) => (a.time || '').localeCompare(b.time || '')));
+      ))));
 
       cancelEditTask();
       fetchStats();
@@ -278,7 +309,12 @@ export default function Productivity() {
     try {
       const userId = getUserId();
       await api.delete(`/api/productivity/tasks/${id}/delete/?user_id=${userId}`);
-      setTasks(tasks.filter(t => t.id !== id));
+      setTasks((prev) => {
+        const next = prev.filter(t => t.id !== id);
+        updateTodayWeeklyPercent(next);
+        return next;
+      });
+      fetchStats();
       
       if (task && task.recurrence && task.recurrence !== 'once') {
         toast.success('Recurring task deleted - won\'t appear tomorrow');
@@ -419,12 +455,22 @@ export default function Productivity() {
                       <div className="flex gap-2">
                         <input
                           type="time"
-                          value={taskDraft.time}
+                          value={taskDraft.time || ''}
                           onChange={(e) => setTaskDraft({ ...taskDraft, time: e.target.value })}
+                          disabled={!taskDraft.time}
                           className={`px-3 py-2 rounded border text-sm outline-none ${
                             darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                           }`}
                         />
+                        <label className={`flex items-center gap-2 px-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <input
+                            type="checkbox"
+                            checked={!taskDraft.time}
+                            onChange={(e) => setTaskDraft({ ...taskDraft, time: e.target.checked ? '' : '09:00' })}
+                            className="w-4 h-4 cursor-pointer accent-blue-500"
+                          />
+                          Unspecified
+                        </label>
                         <select
                           value={taskDraft.recurrence}
                           onChange={(e) => setTaskDraft({ ...taskDraft, recurrence: e.target.value })}
@@ -479,7 +525,7 @@ export default function Productivity() {
                       }`}
                       title="Click to edit time"
                     >
-                      {task.time}
+                      {task.time || 'Unspecified'}
                     </button>
 
                     <button
@@ -512,10 +558,20 @@ export default function Productivity() {
             <div className="flex space-x-2">
               <input
                 type="time"
-                value={newTask.time}
+                value={newTask.time || ''}
                 onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
+                disabled={!newTask.time}
                 className={`px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300'}`}
               />
+              <label className={`flex items-center gap-2 px-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                <input
+                  type="checkbox"
+                  checked={!newTask.time}
+                  onChange={(e) => setNewTask({ ...newTask, time: e.target.checked ? '' : '09:00' })}
+                  className="w-4 h-4 cursor-pointer accent-blue-500"
+                />
+                Unspecified
+              </label>
               <input
                 type="text"
                 placeholder="Add task..."

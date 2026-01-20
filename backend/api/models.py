@@ -144,7 +144,7 @@ class Task(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=500)
-    scheduled_time = models.TimeField()
+    scheduled_time = models.TimeField(null=True, blank=True)
     date = models.DateField()
     completed = models.BooleanField(default=False)
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')

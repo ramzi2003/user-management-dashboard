@@ -224,6 +224,8 @@ class SavingsSerializer(serializers.ModelSerializer):
 
 # Productivity Serializers
 class TaskSerializer(serializers.ModelSerializer):
+    scheduled_time = serializers.TimeField(required=False, allow_null=True)
+
     class Meta:
         model = Task
         fields = ['id', 'title', 'scheduled_time', 'date', 'completed', 'priority', 'recurrence', 'is_template', 'created_at', 'updated_at', 'completed_at']
@@ -232,8 +234,6 @@ class TaskSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if 'title' in data and not data['title'].strip():
             raise serializers.ValidationError({"title": "Title cannot be empty."})
-        if 'scheduled_time' not in data and self.instance is None:
-            raise serializers.ValidationError({"scheduled_time": "Scheduled time is required."})
         if 'date' not in data and self.instance is None:
             raise serializers.ValidationError({"date": "Date is required."})
         return data
