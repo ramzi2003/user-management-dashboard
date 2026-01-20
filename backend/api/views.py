@@ -1374,7 +1374,9 @@ def productivity_tasks(request):
     # Get tasks for the target date (exclude templates)
     tasks = Task.objects.filter(user=user, is_template=False)
     
-    if task_date or not task_date:  # Always filter by date when getting tasks
+    # If a date is provided, return only that day's tasks.
+    # If no date is provided, return tasks across all dates (still excluding templates).
+    if task_date:
         tasks = tasks.filter(date=target_date)
     
     serializer = TaskSerializer(tasks, many=True)
