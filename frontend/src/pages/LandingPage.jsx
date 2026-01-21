@@ -94,11 +94,12 @@ function LandingPage() {
       {/* Hero Section */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors duration-300">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="w-8 h-8 text-indigo-500 dark:text-indigo-400" />
-            <span className="text-xl font-semibold text-gray-900 dark:text-white">Life Dashboard</span>
+          <div className="flex items-center space-x-2 min-w-0">
+            <BarChart3 className="w-8 h-8 text-indigo-500 dark:text-indigo-400 shrink-0" />
+            <span className="text-lg font-semibold text-gray-900 dark:text-white truncate sm:hidden">Dashboard</span>
+            <span className="hidden sm:inline text-xl font-semibold text-gray-900 dark:text-white truncate">Life Dashboard</span>
           </div>
-          <div className="flex items-center gap-2 sm:gap-6 flex-wrap justify-end">
+          <div className="flex items-center gap-2 sm:gap-6 flex-nowrap justify-end">
             <a href="#features" className="hidden sm:inline text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">Features</a>
             <a href="#" className="hidden sm:inline text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">About</a>
             <button
@@ -114,13 +115,13 @@ function LandingPage() {
             </button>
             <button 
               onClick={() => navigate('/signin')}
-              className="px-3 sm:px-5 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium"
+              className="px-3 sm:px-5 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium whitespace-nowrap shrink-0"
             >
               Sign In
             </button>
             <button 
               onClick={() => navigate('/signup')}
-              className="px-3 sm:px-5 py-2 bg-indigo-500 dark:bg-indigo-600 text-white rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 transition font-medium"
+              className="px-3 sm:px-5 py-2 bg-indigo-500 dark:bg-indigo-600 text-white rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 transition font-medium whitespace-nowrap shrink-0"
             >
               Sign Up
             </button>
@@ -350,7 +351,7 @@ function LandingPage() {
             </div>
           </div>
           <div className="pt-8 border-t border-gray-200 dark:border-gray-700 text-center text-sm text-gray-600 dark:text-gray-400">
-            <p>&copy; 2025 Life Dashboard. All rights reserved.</p>
+            <p>&copy; 2026 Life Dashboard. All rights reserved.</p>
           </div>
         </div>
       </footer>
