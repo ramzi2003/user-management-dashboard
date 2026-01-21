@@ -972,7 +972,7 @@ export default function Productivity() {
           <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Last 7 Days Productivity</h3>
           <div className="flex gap-2">
             {/* Y-axis */}
-            <div className="flex flex-col justify-between h-40 text-xs text-right pr-2">
+            <div className="hidden sm:flex flex-col justify-between h-40 text-xs text-right pr-2">
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>100%</span>
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>75%</span>
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>50%</span>
@@ -980,17 +980,19 @@ export default function Productivity() {
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>0%</span>
             </div>
             {/* Chart */}
-            <div className="flex-1 overflow-x-auto pb-2">
-              <div className="min-w-[420px] flex items-end justify-between h-40 gap-2">
+            <div className="flex-1">
+              <div className="flex items-end justify-between h-40 gap-1 sm:gap-2">
                 {(weeklyLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).map((dayLabel, i) => (
-                  <div key={`${dayLabel}-${i}`} className="flex flex-col items-center flex-1">
+                  <div key={`${dayLabel}-${i}`} className="flex flex-col items-center flex-1 min-w-0">
                     <div className="relative w-full flex flex-col items-center">
-                      <span className={`text-xs font-semibold mb-1 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                      <span className={`text-[10px] sm:text-xs font-semibold mb-1 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                         {weeklyData[i]}%
                       </span>
                       <div className="w-full bg-gradient-to-b from-blue-400 to-blue-500 rounded-t" style={{ height: `${(weeklyData[i] / 100) * 120}px` }}></div>
                     </div>
-                    <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-2 font-medium`}>{dayLabel}</p>
+                    <p className={`text-[10px] sm:text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-2 font-medium truncate w-full text-center`}>
+                      {dayLabel}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1004,7 +1006,7 @@ export default function Productivity() {
           <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>{currentYear} Productivity by Month</h3>
           <div className="flex gap-2">
             {/* Y-axis */}
-            <div className="flex flex-col justify-between h-40 text-xs text-right pr-2">
+            <div className="hidden sm:flex flex-col justify-between h-40 text-xs text-right pr-2">
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>100%</span>
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>75%</span>
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>50%</span>
@@ -1012,27 +1014,37 @@ export default function Productivity() {
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>0%</span>
             </div>
             {/* Chart */}
-            <div className="flex-1 overflow-x-auto pb-2">
-              <div className="min-w-[560px]">
-                <div className="flex items-end justify-between h-40 gap-1">
+            <div className="flex-1">
+              <div className="grid grid-cols-12 items-end h-40 gap-0.5 sm:gap-1">
                 {monthlyData.map((value, i) => (
-                  <div key={i} className="flex-1 relative group">
+                  <div key={i} className="relative group">
                     <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <span className={`text-xs font-semibold ${darkMode ? 'text-emerald-300' : 'text-emerald-700'} whitespace-nowrap`}>
                         {(monthlyLabels[i] || `M${i + 1}`)}: {value}%
                       </span>
                     </div>
-                    <div className="w-full bg-gradient-to-b from-emerald-400 to-emerald-500 rounded-t hover:opacity-80 transition" style={{ height: `${(value / 100) * 120}px` }}></div>
+                    <div
+                      className="w-full bg-gradient-to-b from-emerald-400 to-emerald-500 rounded-t hover:opacity-80 transition"
+                      style={{ height: `${(value / 100) * 120}px` }}
+                    />
                   </div>
                 ))}
-                </div>
-                <div className="flex justify-between gap-1 mt-2">
-                  {monthlyData.map((_, i) => (
-                    <div key={`label-${i}`} className={`flex-1 text-center text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {monthlyLabels[i] || `M${i + 1}`}
+              </div>
+              <div className="grid grid-cols-12 gap-0.5 sm:gap-1 mt-2">
+                {monthlyData.map((_, i) => {
+                  const full = monthlyLabels[i] || `M${i + 1}`;
+                  const short = String(full).slice(0, 3);
+                  return (
+                    <div
+                      key={`label-${i}`}
+                      className={`text-center text-[9px] sm:text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'} truncate`}
+                      title={full}
+                    >
+                      <span className="sm:hidden">{short}</span>
+                      <span className="hidden sm:inline">{full}</span>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             </div>
           </div>
