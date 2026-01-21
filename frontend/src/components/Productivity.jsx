@@ -436,7 +436,7 @@ export default function Productivity() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Productivity</h1>
         <div className={`text-2xl font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{currentMonth}</div>
       </div>
@@ -475,7 +475,7 @@ export default function Productivity() {
                           Daily
                         </div>
                         {todayDailyTasks.map(task => (
-                          <div key={task.id} className={`flex items-center space-x-3 p-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-100'} rounded-lg transition`}>
+                          <div key={task.id} className={`flex flex-wrap items-center gap-2 p-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-100'} rounded-lg transition`}>
                             <input
                               type="checkbox"
                               checked={task.completed}
@@ -492,17 +492,17 @@ export default function Productivity() {
                                       darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                     }`}
                                   />
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-col sm:flex-row gap-2">
                                     <input
                                       type="time"
                                       value={taskDraft.time || ''}
                                       onChange={(e) => setTaskDraft({ ...taskDraft, time: e.target.value })}
                                       disabled={!taskDraft.time}
-                                      className={`px-3 py-2 rounded border text-sm outline-none ${
+                                      className={`w-full sm:w-auto px-3 py-2 rounded border text-sm outline-none ${
                                         darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                       }`}
                                     />
-                                    <label className={`flex items-center gap-2 px-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <label className={`flex items-center gap-2 px-2 text-xs font-medium sm:whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                       <input
                                         type="checkbox"
                                         checked={!taskDraft.time}
@@ -514,7 +514,7 @@ export default function Productivity() {
                                     <select
                                       value={taskDraft.recurrence}
                                       onChange={(e) => setTaskDraft({ ...taskDraft, recurrence: e.target.value })}
-                                      className={`flex-1 px-3 py-2 rounded border text-sm outline-none ${
+                                      className={`w-full sm:flex-1 px-3 py-2 rounded border text-sm outline-none ${
                                         darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                       }`}
                                     >
@@ -549,7 +549,7 @@ export default function Productivity() {
                                 <button
                                   type="button"
                                   onClick={() => startEditTask(task)}
-                                  className={`flex-1 text-left text-sm font-medium ${
+                                  className={`flex-1 min-w-[10rem] text-left text-sm font-medium ${
                                     task.completed ? `line-through ${darkMode ? 'text-gray-500' : 'text-gray-500'}` : `${darkMode ? 'text-white' : 'text-gray-900'}`
                                   }`}
                                   title="Click to edit"
@@ -579,7 +579,7 @@ export default function Productivity() {
                                   Daily
                                 </button>
 
-                                <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold`}>✕</button>
+                                <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold ml-auto`}>✕</button>
                               </>
                             )}
                           </div>
@@ -594,7 +594,7 @@ export default function Productivity() {
                           Weekdays
                         </div>
                         {todayWeekdayTasks.map(task => (
-                          <div key={task.id} className={`flex items-center space-x-3 p-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-100'} rounded-lg transition`}>
+                          <div key={task.id} className={`flex flex-wrap items-center gap-2 p-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-100'} rounded-lg transition`}>
                             <input
                               type="checkbox"
                               checked={task.completed}
@@ -611,17 +611,17 @@ export default function Productivity() {
                                       darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                     }`}
                                   />
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-col sm:flex-row gap-2">
                                     <input
                                       type="time"
                                       value={taskDraft.time || ''}
                                       onChange={(e) => setTaskDraft({ ...taskDraft, time: e.target.value })}
                                       disabled={!taskDraft.time}
-                                      className={`px-3 py-2 rounded border text-sm outline-none ${
+                                      className={`w-full sm:w-auto px-3 py-2 rounded border text-sm outline-none ${
                                         darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                       }`}
                                     />
-                                    <label className={`flex items-center gap-2 px-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <label className={`flex items-center gap-2 px-2 text-xs font-medium sm:whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                       <input
                                         type="checkbox"
                                         checked={!taskDraft.time}
@@ -633,7 +633,7 @@ export default function Productivity() {
                                     <select
                                       value={taskDraft.recurrence}
                                       onChange={(e) => setTaskDraft({ ...taskDraft, recurrence: e.target.value })}
-                                      className={`flex-1 px-3 py-2 rounded border text-sm outline-none ${
+                                      className={`w-full sm:flex-1 px-3 py-2 rounded border text-sm outline-none ${
                                         darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                       }`}
                                     >
@@ -668,7 +668,7 @@ export default function Productivity() {
                                 <button
                                   type="button"
                                   onClick={() => startEditTask(task)}
-                                  className={`flex-1 text-left text-sm font-medium ${
+                                  className={`flex-1 min-w-[10rem] text-left text-sm font-medium ${
                                     task.completed ? `line-through ${darkMode ? 'text-gray-500' : 'text-gray-500'}` : `${darkMode ? 'text-white' : 'text-gray-900'}`
                                   }`}
                                   title="Click to edit"
@@ -698,7 +698,7 @@ export default function Productivity() {
                                   Weekdays
                                 </button>
 
-                                <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold`}>✕</button>
+                                <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold ml-auto`}>✕</button>
                               </>
                             )}
                           </div>
@@ -711,15 +711,15 @@ export default function Productivity() {
               </div>
 
               <div className={`space-y-2 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <input
                     type="time"
                     value={newTask.time || ''}
                     onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
                     disabled={!newTask.time}
-                    className={`px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                    className={`w-full sm:w-auto px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
                   />
-                  <label className={`flex items-center gap-2 px-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <label className={`flex items-center gap-2 px-2 text-xs font-medium sm:whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     <input
                       type="checkbox"
                       checked={!newTask.time}
@@ -734,7 +734,7 @@ export default function Productivity() {
                     value={newTask.title}
                     onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
                     onKeyPress={(e) => e.key === 'Enter' && addTask()}
-                    className={`flex-1 px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300'}`}
+                    className={`w-full sm:flex-1 px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300'}`}
                   />
                 </div>
                 <select
@@ -769,7 +769,7 @@ export default function Productivity() {
                   </div>
                 ) : (
                   todayOneTimeTasks.map((task) => (
-                    <div key={task.id} className={`flex items-center space-x-3 p-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-100'} rounded-lg transition`}>
+                    <div key={task.id} className={`flex flex-wrap items-center gap-2 p-3 ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-100'} rounded-lg transition`}>
                       <input
                         type="checkbox"
                         checked={task.completed}
@@ -786,17 +786,17 @@ export default function Productivity() {
                                 darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                               }`}
                             />
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
                               <input
                                 type="time"
                                 value={taskDraft.time || ''}
                                 onChange={(e) => setTaskDraft({ ...taskDraft, time: e.target.value })}
                                 disabled={!taskDraft.time}
-                                className={`px-3 py-2 rounded border text-sm outline-none ${
+                                className={`w-full sm:w-auto px-3 py-2 rounded border text-sm outline-none ${
                                   darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                 }`}
                               />
-                              <label className={`flex items-center gap-2 px-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              <label className={`flex items-center gap-2 px-2 text-xs font-medium sm:whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                 <input
                                   type="checkbox"
                                   checked={!taskDraft.time}
@@ -808,7 +808,7 @@ export default function Productivity() {
                               <select
                                 value={taskDraft.recurrence}
                                 onChange={(e) => setTaskDraft({ ...taskDraft, recurrence: e.target.value })}
-                                className={`flex-1 px-3 py-2 rounded border text-sm outline-none ${
+                                className={`w-full sm:flex-1 px-3 py-2 rounded border text-sm outline-none ${
                                   darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                                 }`}
                               >
@@ -843,7 +843,7 @@ export default function Productivity() {
                           <button
                             type="button"
                             onClick={() => startEditTask(task)}
-                            className={`flex-1 text-left text-sm font-medium ${
+                            className={`flex-1 min-w-[10rem] text-left text-sm font-medium ${
                               task.completed ? `line-through ${darkMode ? 'text-gray-500' : 'text-gray-500'}` : `${darkMode ? 'text-white' : 'text-gray-900'}`
                             }`}
                             title="Click to edit"
@@ -873,7 +873,7 @@ export default function Productivity() {
                             Today
                           </button>
 
-                          <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold`}>✕</button>
+                          <button onClick={() => deleteTask(task.id)} className={`${darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'} text-sm font-bold ml-auto`}>✕</button>
                         </>
                       )}
                     </div>
@@ -980,18 +980,20 @@ export default function Productivity() {
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>0%</span>
             </div>
             {/* Chart */}
-            <div className="flex-1 flex items-end justify-between h-40 gap-2">
-              {(weeklyLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).map((dayLabel, i) => (
-                <div key={`${dayLabel}-${i}`} className="flex flex-col items-center flex-1">
-                  <div className="relative w-full flex flex-col items-center">
-                    <span className={`text-xs font-semibold mb-1 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                      {weeklyData[i]}%
-                    </span>
-                    <div className="w-full bg-gradient-to-b from-blue-400 to-blue-500 rounded-t" style={{ height: `${(weeklyData[i] / 100) * 120}px` }}></div>
+            <div className="flex-1 overflow-x-auto pb-2">
+              <div className="min-w-[420px] flex items-end justify-between h-40 gap-2">
+                {(weeklyLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).map((dayLabel, i) => (
+                  <div key={`${dayLabel}-${i}`} className="flex flex-col items-center flex-1">
+                    <div className="relative w-full flex flex-col items-center">
+                      <span className={`text-xs font-semibold mb-1 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                        {weeklyData[i]}%
+                      </span>
+                      <div className="w-full bg-gradient-to-b from-blue-400 to-blue-500 rounded-t" style={{ height: `${(weeklyData[i] / 100) * 120}px` }}></div>
+                    </div>
+                    <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-2 font-medium`}>{dayLabel}</p>
                   </div>
-                  <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-2 font-medium`}>{dayLabel}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
           <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-4 text-center`}>Average: {Math.round(weeklyData.reduce((a, b) => a + b) / weeklyData.length)}%</p>
@@ -1010,25 +1012,27 @@ export default function Productivity() {
               <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>0%</span>
             </div>
             {/* Chart */}
-            <div className="flex-1">
-              <div className="flex items-end justify-between h-40 gap-1">
-              {monthlyData.map((value, i) => (
-                <div key={i} className="flex-1 relative group">
-                  <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className={`text-xs font-semibold ${darkMode ? 'text-emerald-300' : 'text-emerald-700'} whitespace-nowrap`}>
-                      {(monthlyLabels[i] || `M${i + 1}`)}: {value}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gradient-to-b from-emerald-400 to-emerald-500 rounded-t hover:opacity-80 transition" style={{ height: `${(value / 100) * 120}px` }}></div>
-                </div>
-              ))}
-              </div>
-              <div className="flex justify-between gap-1 mt-2">
-                {monthlyData.map((_, i) => (
-                  <div key={`label-${i}`} className={`flex-1 text-center text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    {monthlyLabels[i] || `M${i + 1}`}
+            <div className="flex-1 overflow-x-auto pb-2">
+              <div className="min-w-[560px]">
+                <div className="flex items-end justify-between h-40 gap-1">
+                {monthlyData.map((value, i) => (
+                  <div key={i} className="flex-1 relative group">
+                    <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className={`text-xs font-semibold ${darkMode ? 'text-emerald-300' : 'text-emerald-700'} whitespace-nowrap`}>
+                        {(monthlyLabels[i] || `M${i + 1}`)}: {value}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gradient-to-b from-emerald-400 to-emerald-500 rounded-t hover:opacity-80 transition" style={{ height: `${(value / 100) * 120}px` }}></div>
                   </div>
                 ))}
+                </div>
+                <div className="flex justify-between gap-1 mt-2">
+                  {monthlyData.map((_, i) => (
+                    <div key={`label-${i}`} className={`flex-1 text-center text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {monthlyLabels[i] || `M${i + 1}`}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

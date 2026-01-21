@@ -481,7 +481,7 @@ export default function Lakawon({ darkMode }) {
       {/* Main Content - Calendar and Sidebar */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Calendar View - Left Side (2/3) */}
-        <div className={`lg:col-span-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
+        <div className={`lg:col-span-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-4 sm:p-6 border transition-colors duration-300`}>
           {/* Calendar Header */}
           <div className="flex justify-between items-center mb-6">
             <button
@@ -502,61 +502,63 @@ export default function Lakawon({ darkMode }) {
           </div>
 
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-2">
-            {/* Day Headers */}
-            {dayNames.map(day => (
-              <div key={day} className={`text-center text-sm font-medium py-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                {day}
-              </div>
-            ))}
-
-            {/* Calendar Days */}
-            {days.map((date, idx) => {
-              if (!date) {
-                return <div key={`empty-${idx}`} className="h-16" />;
-              }
-
-              const dateStr = formatDateLocal(date);
-              const dayClasses = getClassesForDate(date);
-              const isToday = date.toDateString() === today.toDateString();
-              const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
-              const isPeriod1 = date.getDate() <= 15;
-              
-              return (
-                <div
-                  key={dateStr}
-                  onClick={() => handleDateClick(date)}
-                  className={`h-16 p-1 rounded-lg cursor-pointer transition-all ${
-                    isSelected
-                      ? darkMode ? 'bg-indigo-600 border-2 border-indigo-400' : 'bg-indigo-100 border-2 border-indigo-500'
-                      : isToday
-                      ? darkMode ? 'bg-gray-700 border-2 border-indigo-500' : 'bg-gray-50 border-2 border-indigo-300'
-                      : darkMode ? 'hover:bg-gray-700 border border-gray-600' : 'hover:bg-gray-50 border border-gray-200'
-                  }`}
-                >
-                  <div className={`text-xs font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    {date.getDate()}
-                  </div>
-                  <div className="flex flex-wrap gap-0.5">
-                    {dayClasses.map((classItem, i) => (
-                      <div
-                        key={i}
-                        className={`w-2 h-2 rounded-full ${
-                          classItem.cancelled 
-                            ? 'bg-orange-500'
-                            : 'bg-emerald-500'
-                        }`}
-                        title={`${classItem.time} - ${classItem.cancelled ? 'Cancelled' : classItem.class_type === 'regular' ? 'Regular ($5)' : 'Demo ($3)'}`}
-                      />
-                    ))}
-                  </div>
-                  {/* Period indicator */}
-                  <div className={`text-[8px] mt-0.5 ${isPeriod1 ? 'text-blue-500' : 'text-green-500'}`}>
-                    {isPeriod1 ? 'P1' : 'P2'}
-                  </div>
+          <div className="overflow-x-auto -mx-2 px-2">
+            <div className="min-w-[420px] grid grid-cols-7 gap-1 sm:gap-2">
+              {/* Day Headers */}
+              {dayNames.map(day => (
+                <div key={day} className={`text-center text-xs sm:text-sm font-medium py-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {day}
                 </div>
-              );
-            })}
+              ))}
+
+              {/* Calendar Days */}
+              {days.map((date, idx) => {
+                if (!date) {
+                  return <div key={`empty-${idx}`} className="h-12 sm:h-16" />;
+                }
+
+                const dateStr = formatDateLocal(date);
+                const dayClasses = getClassesForDate(date);
+                const isToday = date.toDateString() === today.toDateString();
+                const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+                const isPeriod1 = date.getDate() <= 15;
+                
+                return (
+                  <div
+                    key={dateStr}
+                    onClick={() => handleDateClick(date)}
+                    className={`h-12 sm:h-16 p-1 rounded-lg cursor-pointer transition-all ${
+                      isSelected
+                        ? darkMode ? 'bg-indigo-600 border-2 border-indigo-400' : 'bg-indigo-100 border-2 border-indigo-500'
+                        : isToday
+                        ? darkMode ? 'bg-gray-700 border-2 border-indigo-500' : 'bg-gray-50 border-2 border-indigo-300'
+                        : darkMode ? 'hover:bg-gray-700 border border-gray-600' : 'hover:bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    <div className={`text-xs font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {date.getDate()}
+                    </div>
+                    <div className="flex flex-wrap gap-0.5">
+                      {dayClasses.map((classItem, i) => (
+                        <div
+                          key={i}
+                          className={`w-2 h-2 rounded-full ${
+                            classItem.cancelled 
+                              ? 'bg-orange-500'
+                              : 'bg-emerald-500'
+                          }`}
+                          title={`${classItem.time} - ${classItem.cancelled ? 'Cancelled' : classItem.class_type === 'regular' ? 'Regular ($5)' : 'Demo ($3)'}`}
+                        />
+                      ))}
+                    </div>
+                    {/* Period indicator */}
+                    <div className={`text-[7px] sm:text-[8px] mt-0.5 ${isPeriod1 ? 'text-blue-500' : 'text-green-500'}`}>
+                      {isPeriod1 ? 'P1' : 'P2'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 

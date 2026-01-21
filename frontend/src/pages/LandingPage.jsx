@@ -93,14 +93,14 @@ function LandingPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       {/* Hero Section */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors duration-300">
-        <nav className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center space-x-2">
             <BarChart3 className="w-8 h-8 text-indigo-500 dark:text-indigo-400" />
             <span className="text-xl font-semibold text-gray-900 dark:text-white">Life Dashboard</span>
           </div>
-          <div className="flex items-center space-x-6">
-            <a href="#features" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">Features</a>
-            <a href="#" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">About</a>
+          <div className="flex items-center gap-2 sm:gap-6 flex-wrap justify-end">
+            <a href="#features" className="hidden sm:inline text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">Features</a>
+            <a href="#" className="hidden sm:inline text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">About</a>
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -114,13 +114,13 @@ function LandingPage() {
             </button>
             <button 
               onClick={() => navigate('/signin')}
-              className="px-5 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium"
+              className="px-3 sm:px-5 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium"
             >
               Sign In
             </button>
             <button 
               onClick={() => navigate('/signup')}
-              className="px-5 py-2 bg-indigo-500 dark:bg-indigo-600 text-white rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 transition font-medium"
+              className="px-3 sm:px-5 py-2 bg-indigo-500 dark:bg-indigo-600 text-white rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-700 transition font-medium"
             >
               Sign Up
             </button>
@@ -129,12 +129,12 @@ function LandingPage() {
       </header>
 
       {/* Hero Content */}
-      <section className="max-w-7xl mx-auto px-6 py-20 text-center">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
             Your Personal Life Dashboard
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed max-w-3xl mx-auto">
+          <p className="text-base sm:text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed max-w-3xl mx-auto">
             Organize every aspect of your life in one beautiful, intuitive platform.
             Track finances, health, productivity, and more with powerful tools designed
             for the modern individual.
@@ -155,12 +155,12 @@ function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="max-w-7xl mx-auto px-6 py-20">
+      <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
             Everything You Need, All in One Place
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
             Comprehensive tools to help you manage every aspect of your personal life with elegance and efficiency.
           </p>
         </div>
@@ -186,13 +186,13 @@ function LandingPage() {
       </section>
 
       {/* Visual Preview Section */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="bg-gradient-to-br from-indigo-50 to-emerald-50 dark:from-indigo-900/30 dark:to-emerald-900/30 rounded-3xl p-12 border border-gray-200 dark:border-gray-700">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
+        <div className="bg-gradient-to-br from-indigo-50 to-emerald-50 dark:from-indigo-900/30 dark:to-emerald-900/30 rounded-3xl p-6 sm:p-12 border border-gray-200 dark:border-gray-700">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
               A Dashboard That Works For You
             </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-300">
+            <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300">
               Customize your view with widgets and tools that matter most to you
             </p>
           </div>
@@ -251,7 +251,7 @@ function LandingPage() {
             </div>
 
             {/* Additional Stats Row */}
-            <div className="grid grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
               <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">12</div>
                 <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">Active Goals</div>
@@ -274,7 +274,7 @@ function LandingPage() {
       </section>
 
       {/* Benefits Section */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
         <div className="grid md:grid-cols-4 gap-8">
           {benefits.map((benefit, index) => (
             <div key={index} className="text-center">
@@ -293,12 +293,12 @@ function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 rounded-3xl p-16 text-center shadow-xl">
-          <h2 className="text-4xl font-bold text-white mb-4">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
+        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 rounded-3xl p-8 sm:p-16 text-center shadow-xl">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
             Start Managing Your Life Today
           </h2>
-          <p className="text-xl text-indigo-100 dark:text-indigo-200 mb-8 max-w-2xl mx-auto">
+          <p className="text-base sm:text-xl text-indigo-100 dark:text-indigo-200 mb-8 max-w-2xl mx-auto">
             Join thousands of users who have transformed the way they organize their personal lives.
           </p>
           <button 
@@ -313,7 +313,7 @@ function LandingPage() {
 
       {/* Footer */}
       <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-20 transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-6 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">

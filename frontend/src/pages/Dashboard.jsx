@@ -38,7 +38,9 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState(() => {
     return localStorage.getItem('dashboard_activeSection') || 'home';
   });
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Desktop: expanded/collapsed. Mobile: off-canvas open/closed.
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [showCurrencySettings, setShowCurrencySettings] = useState(false);
 
@@ -166,6 +168,7 @@ export default function Dashboard() {
   const otherSectionIds = new Set(otherMenuItems.map((i) => i.id));
 
   const [otherMenuOpen, setOtherMenuOpen] = useState(() => otherSectionIds.has(activeSection));
+  const showSidebarLabels = sidebarExpanded || mobileSidebarOpen;
 
   // If user navigates to an "other" page, auto-expand "More"
   useEffect(() => {
@@ -177,7 +180,8 @@ export default function Dashboard() {
       key={item.id}
       onClick={() => {
         setActiveSection(item.id);
-        setSidebarOpen(true);
+        // Close mobile drawer after navigation.
+        setMobileSidebarOpen(false);
       }}
       className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
         activeSection === item.id
@@ -186,7 +190,7 @@ export default function Dashboard() {
       } ${compact ? 'py-2' : ''}`}
     >
       <span className={item.color}>{item.icon}</span>
-      {sidebarOpen && <span className={`text-sm font-medium ${compact ? 'opacity-90' : ''}`}>{item.label}</span>}
+      {showSidebarLabels && <span className={`text-sm font-medium ${compact ? 'opacity-90' : ''}`}>{item.label}</span>}
     </button>
   );
 
@@ -208,27 +212,35 @@ export default function Dashboard() {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300`}>
+      {/* Mobile backdrop */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <div
         className={`${
-          sidebarOpen ? 'w-64' : 'w-20'
-        } ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r transition-all duration-300 flex flex-col fixed left-0 top-0 h-screen z-50 shadow-lg`}
+          sidebarExpanded ? 'lg:w-64' : 'lg:w-20'
+        } w-64 ${
+          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0 ${
+          darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        } border-r transition-all duration-300 flex flex-col fixed left-0 top-0 h-screen z-50 shadow-lg`}
       >
         {/* Logo */}
         <div className={`p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between`}>
-          <div className={`flex items-center space-x-2 ${!sidebarOpen && 'hidden'}`}>
+          <div className={`flex items-center space-x-2 ${!showSidebarLabels && 'hidden'}`}>
             <BarChart3 className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
             <span className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Dashboard</span>
           </div>
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={() => setMobileSidebarOpen(false)}
             className="lg:hidden p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
           >
-            {sidebarOpen ? (
-              <X className={`w-5 h-5 ${darkMode ? 'text-white' : 'text-gray-900'}`} />
-            ) : (
-              <Menu className={`w-5 h-5 ${darkMode ? 'text-white' : 'text-gray-900'}`} />
-            )}
+            <X className={`w-5 h-5 ${darkMode ? 'text-white' : 'text-gray-900'}`} />
           </button>
         </div>
 
@@ -251,9 +263,9 @@ export default function Dashboard() {
                   <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                     <ChevronRight className={`w-5 h-5 transition-transform ${otherMenuOpen ? 'rotate-90' : ''}`} />
                   </span>
-                  {sidebarOpen && <span className="text-xs font-semibold tracking-wide uppercase">More</span>}
+                  {showSidebarLabels && <span className="text-xs font-semibold tracking-wide uppercase">More</span>}
                 </div>
-                {sidebarOpen && (
+                {showSidebarLabels && (
                   <span className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     {otherMenuOpen ? 'Hide' : 'Show'}
                   </span>
@@ -277,7 +289,7 @@ export default function Dashboard() {
               darkMode 
                 ? 'text-gray-300 hover:bg-gray-700' 
                 : 'text-gray-700 hover:bg-gray-50'
-            } ${!sidebarOpen && 'justify-center'}`}
+            } ${!showSidebarLabels && 'justify-center'}`}
             title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {darkMode ? (
@@ -285,7 +297,7 @@ export default function Dashboard() {
             ) : (
               <Moon className="w-5 h-5" />
             )}
-            {sidebarOpen && <span className="text-sm font-medium">Dark Mode</span>}
+            {showSidebarLabels && <span className="text-sm font-medium">Dark Mode</span>}
           </button>
           <button
             onClick={handleLogout}
@@ -293,26 +305,35 @@ export default function Dashboard() {
               darkMode 
                 ? 'text-gray-300 hover:bg-red-900 hover:text-red-300' 
                 : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
-            } ${!sidebarOpen && 'justify-center'}`}
+            } ${!showSidebarLabels && 'justify-center'}`}
           >
             <LogOut className="w-5 h-5" />
-            {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
+            {showSidebarLabels && <span className="text-sm font-medium">Logout</span>}
           </button>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className={`overflow-auto transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
+      <div className={`overflow-x-hidden overflow-y-auto transition-all duration-300 ml-0 ${sidebarExpanded ? 'lg:ml-64' : 'lg:ml-20'}`}>
         {/* Header */}
-        <header className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b fixed top-0 right-0 z-40 transition-all duration-300 ${sidebarOpen ? 'left-64' : 'left-20'}`}>
-          <div className="px-6 py-4 flex items-center justify-between">
+        <header className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b fixed top-0 right-0 left-0 z-40 transition-all duration-300 ${sidebarExpanded ? 'lg:left-64' : 'lg:left-20'}`}>
+          <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+            {/* Mobile menu button */}
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            <button
+              onClick={() => setSidebarExpanded(!sidebarExpanded)}
               className="hidden lg:block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex items-center space-x-4 ml-auto">
+            <div className="flex items-center gap-2 sm:gap-4 ml-auto flex-wrap justify-end">
               {/* Currency Selector */}
               <div className="relative">
                 <button
@@ -396,7 +417,7 @@ export default function Dashboard() {
                 )}
               </button>
               
-              <div className="text-right">
+              <div className="text-right hidden sm:block">
                 <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Welcome Back</p>
                 <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{userEmail}</p>
               </div>
@@ -408,7 +429,7 @@ export default function Dashboard() {
         </header>
 
         {/* Content Area */}
-        <main className="p-6 pt-24">
+        <main className="p-4 sm:p-6 pt-24">
           {renderContent()}
         </main>
       </div>

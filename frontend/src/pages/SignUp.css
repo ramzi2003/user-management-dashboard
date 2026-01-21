@@ -421,6 +421,35 @@
   gap: 0.625rem;
 }
 
+.signup-page {
+  min-height: 100vh;
+}
+
+@media (max-width: 520px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-container {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .signup-right {
+    padding: 1rem;
+  }
+
+  .signup-form-container {
+    max-width: 100%;
+  }
+
+  .verification-input {
+    letter-spacing: 0.25rem;
+    font-size: 1.25rem;
+    padding: 0.875rem;
+  }
+}
+
 .form-field {
   display: flex;
   flex-direction: column;
