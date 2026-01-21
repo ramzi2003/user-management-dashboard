@@ -709,50 +709,6 @@ export default function Productivity() {
                   </>
                 )}
               </div>
-
-              <div className={`space-y-2 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <input
-                    type="time"
-                    value={newTask.time || ''}
-                    onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
-                    disabled={!newTask.time}
-                    className={`w-full sm:w-auto px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
-                  />
-                  <label className={`flex items-center gap-2 px-2 text-xs font-medium sm:whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    <input
-                      type="checkbox"
-                      checked={!newTask.time}
-                      onChange={(e) => setNewTask({ ...newTask, time: e.target.checked ? '' : '09:00' })}
-                      className="w-4 h-4 cursor-pointer accent-blue-500"
-                    />
-                    Unspecified
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Add task..."
-                    value={newTask.title}
-                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                    onKeyPress={(e) => e.key === 'Enter' && addTask()}
-                    className={`w-full sm:flex-1 px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300'}`}
-                  />
-                </div>
-                <select
-                  value={newTask.recurrence}
-                  onChange={(e) => setNewTask({ ...newTask, recurrence: e.target.value })}
-                  className={`w-full px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
-                >
-                  <option value="once">One-time (Today only)</option>
-                  <option value="daily">Daily (Every day)</option>
-                  <option value="weekdays">Weekdays (Mon-Fri)</option>
-                </select>
-                <button
-                  onClick={addTask}
-                  className="w-full px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
-                >
-                  Add Task
-                </button>
-              </div>
             </div>
 
             {/* Today only */}
@@ -879,6 +835,67 @@ export default function Productivity() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* Add Task (full width under both lists) */}
+          <div className={`mt-4 rounded-lg border ${darkMode ? 'border-gray-700 bg-gray-900/10' : 'border-gray-200 bg-gray-50/50'} p-4`}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Add a task</h3>
+              <span className={`text-[11px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Applies to today</span>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+                <input
+                  type="time"
+                  value={newTask.time || ''}
+                  onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
+                  disabled={!newTask.time}
+                  className={`w-full lg:w-auto px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+                  }`}
+                />
+                <label className={`flex items-center gap-2 px-2 text-xs font-medium lg:whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <input
+                    type="checkbox"
+                    checked={!newTask.time}
+                    onChange={(e) => setNewTask({ ...newTask, time: e.target.checked ? '' : '09:00' })}
+                    className="w-4 h-4 cursor-pointer accent-blue-500"
+                  />
+                  Unspecified
+                </label>
+                <input
+                  type="text"
+                  placeholder="Add task..."
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  onKeyPress={(e) => e.key === 'Enter' && addTask()}
+                  className={`w-full lg:flex-1 px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300'
+                  }`}
+                />
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-2">
+                <select
+                  value={newTask.recurrence}
+                  onChange={(e) => setNewTask({ ...newTask, recurrence: e.target.value })}
+                  className={`lg:col-span-2 w-full px-3 py-2 border rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+                  }`}
+                >
+                  <option value="once">One-time (Today only)</option>
+                  <option value="daily">Daily (Every day)</option>
+                  <option value="weekdays">Weekdays (Mon-Fri)</option>
+                </select>
+                <button
+                  onClick={addTask}
+                  className="w-full px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
+                >
+                  Add Task
+                </button>
               </div>
             </div>
           </div>

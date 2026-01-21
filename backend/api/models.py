@@ -201,3 +201,152 @@ class MonthlyPlan(models.Model):
     
     def __str__(self):
         return f"{self.year}-{self.month:02d} - {self.title}"
+
+
+# Nutrition & Calories Models
+class NutritionProfile(models.Model):
+    SEX_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+    ]
+
+    ACTIVITY_LEVEL_CHOICES = [
+        ('sedentary', 'Sedentary (little/no exercise)'),
+        ('light', 'Light (1-3 days/week)'),
+        ('moderate', 'Moderate (3-5 days/week)'),
+        ('active', 'Active (6-7 days/week)'),
+        ('athlete', 'Athlete (very intense / 2x per day)'),
+        ('custom', 'Custom multiplier'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='nutrition_profile')
+    sex = models.CharField(max_length=10, choices=SEX_CHOICES)
+    # Either birth_date or age_years must be provided
+    birth_date = models.DateField(null=True, blank=True)
+    age_years = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    height_cm = models.DecimalField(max_digits=5, decimal_places=1)  # e.g. 175.0
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=1)  # e.g. 80.5
+    activity_level = models.CharField(max_length=12, choices=ACTIVITY_LEVEL_CHOICES, default='moderate')
+    activity_multiplier = models.DecimalField(max_digits=4, decimal_places=3, null=True, blank=True)  # for custom
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} nutrition profile"
+
+
+class NutritionGoal(models.Model):
+    GOAL_TYPE_CHOICES = [
+        ('fat_loss', 'Fat loss'),
+        ('maintenance', 'Maintenance'),
+        ('recomp', 'Recomposition'),
+        ('lean_bulk', 'Lean bulk'),
+        ('bulk', 'Bulk'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='nutrition_goal')
+    goal_type = models.CharField(max_length=12, choices=GOAL_TYPE_CHOICES, default='maintenance')
+    # Negative = deficit, positive = surplus, 0 = maintenance
+    calorie_adjustment_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Macro rules (grams per kg bodyweight)
+    protein_g_per_kg = models.DecimalField(max_digits=4, decimal_places=2, default=1.80)
+    fat_g_per_kg = models.DecimalField(max_digits=4, decimal_places=2, default=0.80)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} nutrition goal ({self.goal_type})"
+
+
+class DailyMacroTarget(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_macro_targets')
+    date = models.DateField()
+
+    calories = models.PositiveIntegerField()
+    protein_g = models.PositiveIntegerField()
+    carbs_g = models.PositiveIntegerField()
+    fat_g = models.PositiveIntegerField()
+
+    # Diagnostics (nice to show in UI)
+    bmr = models.PositiveIntegerField()
+    tdee = models.PositiveIntegerField()
+    algorithm_version = models.CharField(max_length=32, default='mifflin_v1')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'date']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} targets {self.date}"
+
+
+# Food logging (Nutrition)
+class FoodItem(models.Model):
+    """User-defined food catalog item (per-serving macros)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='food_items')
+    name = models.CharField(max_length=200)
+
+    calories_kcal = models.PositiveIntegerField()
+    protein_g = models.DecimalField(max_digits=6, decimal_places=1, default=0)
+    carbs_g = models.DecimalField(max_digits=6, decimal_places=1, default=0)
+    fat_g = models.DecimalField(max_digits=6, decimal_places=1, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'name']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} food: {self.name}"
+
+
+class FoodLogEntry(models.Model):
+    """A logged consumption of a FoodItem on a given day."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='food_log_entries')
+    date = models.DateField()
+    food = models.ForeignKey(FoodItem, on_delete=models.CASCADE, related_name='log_entries')
+    servings = models.DecimalField(max_digits=6, decimal_places=2, default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} ate {self.food.name} ({self.servings}) on {self.date}"
+
+
+class WeightCheckIn(models.Model):
+    """Bodyweight check-in, typically weekly."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='weight_checkins')
+    date = models.DateField()
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'date']
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} weigh-in {self.date}: {self.weight_kg}kg"

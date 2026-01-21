@@ -46,7 +46,7 @@ function LandingPage() {
     },
     {
       icon: <Clock className="w-8 h-8 text-indigo-500 dark:text-indigo-400" />,
-      title: "Productivity Tools",
+      title: "Productivity",
       description: "Stay focused with Pomodoro timers, deadline countdowns, and time management features."
     },
     {

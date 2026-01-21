@@ -13,7 +13,14 @@ import {
   TrendingUp,
   Book,
   Menu,
-  X
+  X,
+  Flame,
+  Dumbbell,
+  Apple,
+  TrendingDown,
+  Target,
+  Zap,
+  Award
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -582,25 +589,445 @@ function SalarySection() {
 }
 
 function HealthSection() {
+  const [activeTab, setActiveTab] = useState<'fitness' | 'nutrition'>('fitness');
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900">Health & Fitness</h1>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h3 className="font-semibold text-gray-900 mb-4">Weekly Activity</h3>
-          <div className="space-y-4">
-            <ProgressBar label="Steps" value={8234} max={10000} color="emerald" />
-            <ProgressBar label="Water Intake" value={6} max={8} color="blue" />
-            <ProgressBar label="Sleep" value={7.5} max={8} color="indigo" />
+
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('fitness')}
+          className={`flex items-center gap-2 px-4 py-3 font-medium transition ${
+            activeTab === 'fitness'
+              ? 'border-b-2 border-emerald-500 text-emerald-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Dumbbell className="w-5 h-5" />
+          Workouts & Fitness
+        </button>
+        <button
+          onClick={() => setActiveTab('nutrition')}
+          className={`flex items-center gap-2 px-4 py-3 font-medium transition ${
+            activeTab === 'nutrition'
+              ? 'border-b-2 border-emerald-500 text-emerald-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Apple className="w-5 h-5" />
+          Nutrition & Calories
+        </button>
+      </div>
+
+      {activeTab === 'fitness' && <FitnessTab />}
+      {activeTab === 'nutrition' && <NutritionTab />}
+    </div>
+  );
+}
+
+function FitnessTab() {
+  const [workouts, setWorkouts] = useState<{ id: string; date: string; type: string; duration: number; notes: string }[]>([
+    { id: '1', date: '2025-01-21', type: 'Gym', duration: 60, notes: 'Upper body strength' },
+    { id: '2', date: '2025-01-20', type: 'Running', duration: 45, notes: 'Cardio at park' },
+    { id: '3', date: '2025-01-19', type: 'Yoga', duration: 30, notes: 'Flexibility session' }
+  ]);
+
+  const [streak, setStreak] = useState(5);
+  const [newWorkout, setNewWorkout] = useState({ type: 'Gym', duration: 60, notes: '' });
+  const [markedToday, setMarkedToday] = useState(false);
+
+  const addWorkout = () => {
+    if (newWorkout.type && newWorkout.duration > 0) {
+      setWorkouts([
+        { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], ...newWorkout },
+        ...workouts
+      ]);
+      setNewWorkout({ type: 'Gym', duration: 60, notes: '' });
+    }
+  };
+
+  const markTodayWorkout = () => {
+    if (!markedToday) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayExists = workouts.some(w => w.date === today);
+      if (!todayExists) {
+        setWorkouts([
+          { id: Date.now().toString(), date: today, type: 'Gym', duration: 60, notes: 'Today\'s workout' },
+          ...workouts
+        ]);
+        setStreak(streak + 1);
+        setMarkedToday(true);
+      }
+    }
+  };
+
+  const deleteWorkout = (id: string) => {
+    setWorkouts(workouts.filter(w => w.id !== id));
+  };
+
+  const weeklyCount = workouts.filter(w => {
+    const date = new Date(w.date);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7;
+  }).length;
+
+  const totalHours = workouts
+    .filter(w => {
+      const date = new Date(w.date);
+      const today = new Date();
+      const diffTime = Math.abs(today.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 30;
+    })
+    .reduce((acc, w) => acc + w.duration, 0) / 60;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Streak Tracker */}
+        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 border border-emerald-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900">Workout Streak</h3>
+            <Zap className="w-5 h-5 text-amber-500" />
+          </div>
+          <div className="text-4xl font-bold text-emerald-600 mb-2">{streak}</div>
+          <p className="text-sm text-gray-700">Days in a row</p>
+          <div className="mt-4 pt-4 border-t border-emerald-200 space-y-1 text-xs text-gray-700">
+            <p>Weekly: {weeklyCount} workouts</p>
+            <p>Monthly: {totalHours.toFixed(1)} hours</p>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h3 className="font-semibold text-gray-900 mb-4">Workouts This Week</h3>
+
+        {/* Mark Today's Workout */}
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+          <h3 className="font-bold text-gray-900 mb-4">Today's Workout</h3>
+          <button
+            onClick={markTodayWorkout}
+            disabled={markedToday}
+            className={`w-full py-3 rounded-lg font-semibold transition ${
+              markedToday
+                ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                : 'bg-blue-500 text-white hover:bg-blue-600'
+            }`}
+          >
+            {markedToday ? 'Already logged today' : 'I went to the gym today'}
+          </button>
+          <p className="text-xs text-gray-700 mt-3">Keeps your streak going!</p>
+        </div>
+
+        {/* Weekly Summary */}
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+          <h3 className="font-bold text-gray-900 mb-4">Weekly Summary</h3>
           <div className="space-y-2">
-            <WorkoutItem day="Monday" time="45 min" type="Running" />
-            <WorkoutItem day="Tuesday" time="60 min" type="Gym" />
-            <WorkoutItem day="Wednesday" time="30 min" type="Yoga" />
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-700">Workouts</span>
+              <span className="text-2xl font-bold text-purple-600">{weeklyCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-700">Avg Duration</span>
+              <span className="text-lg font-bold text-purple-600">
+                {weeklyCount > 0 ? (workouts.filter(w => {
+                  const date = new Date(w.date);
+                  const today = new Date();
+                  const diffTime = Math.abs(today.getTime() - date.getTime());
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  return diffDays <= 7;
+                }).reduce((acc, w) => acc + w.duration, 0) / weeklyCount).toFixed(0) : 0} min
+              </span>
+            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Add Workout Form */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Log a Workout</h3>
+        <div className="grid md:grid-cols-4 gap-3">
+          <select
+            value={newWorkout.type}
+            onChange={(e) => setNewWorkout({ ...newWorkout, type: e.target.value })}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+          >
+            <option>Gym</option>
+            <option>Running</option>
+            <option>Cycling</option>
+            <option>Yoga</option>
+            <option>Swimming</option>
+            <option>Sports</option>
+            <option>Walking</option>
+          </select>
+          <input
+            type="number"
+            min="1"
+            value={newWorkout.duration}
+            onChange={(e) => setNewWorkout({ ...newWorkout, duration: parseInt(e.target.value) || 0 })}
+            placeholder="Duration (min)"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+          />
+          <input
+            type="text"
+            value={newWorkout.notes}
+            onChange={(e) => setNewWorkout({ ...newWorkout, notes: e.target.value })}
+            placeholder="Notes..."
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none md:col-span-1"
+          />
+          <button
+            onClick={addWorkout}
+            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium"
+          >
+            Add Workout
+          </button>
+        </div>
+      </div>
+
+      {/* Workout History */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Workout History</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-gray-200">
+              <tr className="text-gray-700 font-semibold">
+                <th className="text-left py-2 px-3">Date</th>
+                <th className="text-left py-2 px-3">Type</th>
+                <th className="text-left py-2 px-3">Duration</th>
+                <th className="text-left py-2 px-3">Notes</th>
+                <th className="text-left py-2 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workouts.map(workout => (
+                <tr key={workout.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-3 text-gray-900">{new Date(workout.date).toLocaleDateString()}</td>
+                  <td className="py-3 px-3">
+                    <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+                      {workout.type}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-gray-700">{workout.duration} min</td>
+                  <td className="py-3 px-3 text-gray-600">{workout.notes}</td>
+                  <td className="py-3 px-3">
+                    <button
+                      onClick={() => deleteWorkout(workout.id)}
+                      className="text-red-500 hover:text-red-700 text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NutritionTab() {
+  const [meals, setMeals] = useState<{ id: string; name: string; calories: number; protein: number; carbs: number; fat: number }[]>([
+    { id: '1', name: 'Chicken Breast + Rice', calories: 450, protein: 35, carbs: 45, fat: 8 },
+    { id: '2', name: 'Oatmeal + Berries', calories: 300, protein: 10, carbs: 50, fat: 5 }
+  ]);
+
+  const [newMeal, setNewMeal] = useState({ name: '', calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [dailyGoals] = useState({ calories: 2500, protein: 150, carbs: 300, fat: 70 });
+
+  const totalCalories = meals.reduce((acc, m) => acc + m.calories, 0);
+  const totalProtein = meals.reduce((acc, m) => acc + m.protein, 0);
+  const totalCarbs = meals.reduce((acc, m) => acc + m.carbs, 0);
+  const totalFat = meals.reduce((acc, m) => acc + m.fat, 0);
+
+  const calorieDeficit = dailyGoals.calories - totalCalories;
+  const caloriePercent = Math.min((totalCalories / dailyGoals.calories) * 100, 100);
+
+  const addMeal = () => {
+    if (newMeal.name && newMeal.calories > 0) {
+      setMeals([...meals, { id: Date.now().toString(), ...newMeal }]);
+      setNewMeal({ name: '', calories: 0, protein: 0, carbs: 0, fat: 0 });
+    }
+  };
+
+  const deleteMeal = (id: string) => {
+    setMeals(meals.filter(m => m.id !== id));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Daily Goals and Macro Summary */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Calorie Goal */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Flame className="w-5 h-5 text-red-500" />
+            Daily Calorie Goal
+          </h3>
+          <div className="text-3xl font-bold text-gray-900 mb-2">{totalCalories}</div>
+          <p className="text-sm text-gray-600 mb-4">/ {dailyGoals.calories} kcal</p>
+
+          <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
+            <div
+              className="bg-gradient-to-r from-red-400 to-red-500 h-3 rounded-full transition-all"
+              style={{ width: `${caloriePercent}%` }}
+            ></div>
+          </div>
+
+          <div className={`text-sm font-semibold ${calorieDeficit > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {calorieDeficit > 0 ? '+' : ''}{calorieDeficit} kcal remaining
+          </div>
+        </div>
+
+        {/* Protein */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Dumbbell className="w-5 h-5 text-emerald-500" />
+            Protein
+          </h3>
+          <div className="text-3xl font-bold text-gray-900 mb-2">{totalProtein}g</div>
+          <p className="text-sm text-gray-600 mb-4">/ {dailyGoals.protein}g</p>
+
+          <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
+            <div
+              className="bg-emerald-500 h-3 rounded-full transition-all"
+              style={{ width: `${Math.min((totalProtein / dailyGoals.protein) * 100, 100)}%` }}
+            ></div>
+          </div>
+
+          <div className="text-sm font-semibold text-gray-700">
+            {((totalProtein / dailyGoals.protein) * 100).toFixed(0)}%
+          </div>
+        </div>
+
+        {/* Carbs & Fat */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Apple className="w-5 h-5 text-amber-500" />
+            Carbs & Fat
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-700">Carbs</span>
+                <span className="font-semibold">{totalCarbs}g / {dailyGoals.carbs}g</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  style={{ width: `${Math.min((totalCarbs / dailyGoals.carbs) * 100, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-700">Fat</span>
+                <span className="font-semibold">{totalFat}g / {dailyGoals.fat}g</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-yellow-500 h-2 rounded-full transition-all"
+                  style={{ width: `${Math.min((totalFat / dailyGoals.fat) * 100, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Meal Form */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Log a Meal</h3>
+        <div className="grid md:grid-cols-5 gap-3">
+          <input
+            type="text"
+            placeholder="Meal name..."
+            value={newMeal.name}
+            onChange={(e) => setNewMeal({ ...newMeal, name: e.target.value })}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none md:col-span-1"
+          />
+          <input
+            type="number"
+            placeholder="Calories"
+            value={newMeal.calories || ''}
+            onChange={(e) => setNewMeal({ ...newMeal, calories: parseInt(e.target.value) || 0 })}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+          />
+          <input
+            type="number"
+            placeholder="Protein (g)"
+            value={newMeal.protein || ''}
+            onChange={(e) => setNewMeal({ ...newMeal, protein: parseInt(e.target.value) || 0 })}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+          />
+          <input
+            type="number"
+            placeholder="Carbs (g)"
+            value={newMeal.carbs || ''}
+            onChange={(e) => setNewMeal({ ...newMeal, carbs: parseInt(e.target.value) || 0 })}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              placeholder="Fat (g)"
+              value={newMeal.fat || ''}
+              onChange={(e) => setNewMeal({ ...newMeal, fat: parseInt(e.target.value) || 0 })}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+            />
+            <button
+              onClick={addMeal}
+              className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition font-medium"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Food Log */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Today's Food Log</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-gray-200">
+              <tr className="text-gray-700 font-semibold">
+                <th className="text-left py-2 px-3">Meal</th>
+                <th className="text-right py-2 px-3">Calories</th>
+                <th className="text-right py-2 px-3">Protein</th>
+                <th className="text-right py-2 px-3">Carbs</th>
+                <th className="text-right py-2 px-3">Fat</th>
+                <th className="text-left py-2 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {meals.map(meal => (
+                <tr key={meal.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-3 font-medium text-gray-900">{meal.name}</td>
+                  <td className="py-3 px-3 text-right text-gray-700">{meal.calories} kcal</td>
+                  <td className="py-3 px-3 text-right text-gray-700">{meal.protein}g</td>
+                  <td className="py-3 px-3 text-right text-gray-700">{meal.carbs}g</td>
+                  <td className="py-3 px-3 text-right text-gray-700">{meal.fat}g</td>
+                  <td className="py-3 px-3">
+                    <button
+                      onClick={() => deleteMeal(meal.id)}
+                      className="text-red-500 hover:text-red-700 text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-gray-50 border-t border-gray-200 font-bold">
+                <td className="py-3 px-3 text-gray-900">Total</td>
+                <td className="py-3 px-3 text-right text-gray-900">{totalCalories} kcal</td>
+                <td className="py-3 px-3 text-right text-gray-900">{totalProtein}g</td>
+                <td className="py-3 px-3 text-right text-gray-900">{totalCarbs}g</td>
+                <td className="py-3 px-3 text-right text-gray-900">{totalFat}g</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

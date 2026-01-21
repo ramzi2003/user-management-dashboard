@@ -28,7 +28,7 @@ npm run build
 - Modern React 18 with Vite
 - Axios for API communication
 - Responsive dashboard UI
-- Connected to Django backend at `http://localhost:8000`
+- Connected to Django backend at `http://127.0.0.1:8000`
 
 ## Project Structure
 

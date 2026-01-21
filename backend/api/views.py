@@ -7,7 +7,9 @@ from .serializers import (
     SignUpSerializer, EmailVerificationSerializer, LoginSerializer, 
     LakawonClassSerializer, LakawonDeductionSerializer,
     IncomeSerializer, ExpenseSerializer, DebtSerializer, LoanSerializer, SavingsSerializer,
-    TaskSerializer, YearlyPlanSerializer, MonthlyPlanSerializer
+    TaskSerializer, YearlyPlanSerializer, MonthlyPlanSerializer,
+    NutritionProfileSerializer, NutritionGoalSerializer, DailyMacroTargetSerializer,
+    FoodItemSerializer, FoodLogEntrySerializer, WeightCheckInSerializer
 )
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
@@ -18,7 +20,12 @@ import string
 from django.core.cache import cache
 import requests
 import json
-from .models import LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings, Task, YearlyPlan, MonthlyPlan
+from .models import (
+    LakawonClass, LakawonDeduction, Income, Expense, Debt, Loan, Savings,
+    Task, YearlyPlan, MonthlyPlan,
+    NutritionProfile, NutritionGoal, DailyMacroTarget,
+    FoodItem, FoodLogEntry, WeightCheckIn
+)
 from datetime import datetime, date, timedelta
 from django.utils import timezone
 from django.db import IntegrityError
@@ -41,6 +48,548 @@ def _authed_user_or_error(request):
         except (TypeError, ValueError):
             return None, Response({'error': 'Invalid user_id.'}, status=status.HTTP_400_BAD_REQUEST)
     return user, None
+
+
+# ----------------------------
+# Nutrition helpers + endpoints
+# ----------------------------
+
+NUTRITION_ALGORITHM_VERSION = 'mifflin_v1'
+
+def _calc_age_years(profile):
+    if profile.birth_date:
+        today = timezone.localdate()
+        years = today.year - profile.birth_date.year
+        before_bday = (today.month, today.day) < (profile.birth_date.month, profile.birth_date.day)
+        return years - (1 if before_bday else 0)
+    if profile.age_years is not None:
+        return int(profile.age_years)
+    return None
+
+
+def _activity_multiplier(profile):
+    if profile.activity_level == 'custom' and profile.activity_multiplier is not None:
+        return float(profile.activity_multiplier)
+    mapping = {
+        'sedentary': 1.2,
+        'light': 1.375,
+        'moderate': 1.55,
+        'active': 1.725,
+        'athlete': 1.9,
+    }
+    return mapping.get(profile.activity_level, 1.55)
+
+
+def _default_goal_adjustment(goal_type):
+    # Defaults can be overridden by user in goal settings
+    return {
+        'fat_loss': -20,
+        'maintenance': 0,
+        'recomp': -10,
+        'lean_bulk': 10,
+        'bulk': 15,
+    }.get(goal_type, 0)
+
+
+def _default_protein_per_kg(goal_type):
+    return {
+        'fat_loss': 2.2,
+        'maintenance': 1.8,
+        'recomp': 2.0,
+        'lean_bulk': 1.8,
+        'bulk': 1.6,
+    }.get(goal_type, 1.8)
+
+
+def _calculate_targets(profile, goal):
+    # Mifflin-St Jeor (metric)
+    age = _calc_age_years(profile)
+    if age is None or age < 10 or age > 120:
+        raise ValueError('Invalid age. Provide birth_date or age_years.')
+
+    weight = float(profile.weight_kg)
+    height = float(profile.height_cm)
+    if weight <= 0 or height <= 0:
+        raise ValueError('Invalid height/weight.')
+
+    sex = profile.sex
+    sex_const = 5 if sex == 'male' else -161
+
+    bmr = (10 * weight) + (6.25 * height) - (5 * age) + sex_const
+    mult = _activity_multiplier(profile)
+    tdee = bmr * mult
+
+    adj = float(goal.calorie_adjustment_percent)
+    if abs(adj) < 0.0001:
+        # If user didn't set anything meaningful, apply goal default
+        adj = float(_default_goal_adjustment(goal.goal_type))
+
+    calories = tdee * (1.0 + (adj / 100.0))
+
+    # Basic safety floor
+    floor = 1500 if sex == 'male' else 1200
+    calories = max(calories, floor)
+
+    # Macros
+    protein_per_kg = float(goal.protein_g_per_kg) if goal.protein_g_per_kg else _default_protein_per_kg(goal.goal_type)
+    fat_per_kg = float(goal.fat_g_per_kg) if goal.fat_g_per_kg else 0.8
+
+    protein_g = max(0, round(protein_per_kg * weight))
+    fat_g = max(0, round(fat_per_kg * weight))
+
+    remaining = calories - (protein_g * 4) - (fat_g * 9)
+    carbs_g = max(0, round(remaining / 4))
+
+    # If macros exceed calories, reduce carbs first (already 0), then reduce fat to minimum 0.3g/kg
+    if carbs_g == 0 and remaining < 0:
+        min_fat = round(0.3 * weight)
+        fat_g = max(min_fat, fat_g + round(remaining / 9))  # remaining is negative
+        remaining2 = calories - (protein_g * 4) - (fat_g * 9)
+        carbs_g = max(0, round(remaining2 / 4))
+
+    return {
+        'bmr': int(round(bmr)),
+        'tdee': int(round(tdee)),
+        'calories': int(round(calories)),
+        'protein_g': int(protein_g),
+        'carbs_g': int(carbs_g),
+        'fat_g': int(fat_g),
+        'activity_multiplier': float(mult),
+        'calorie_adjustment_percent': float(adj),
+        'algorithm_version': NUTRITION_ALGORITHM_VERSION,
+    }
+
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def nutrition_profile(request):
+    """Get or update nutrition profile for the authenticated user."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    profile, _ = NutritionProfile.objects.get_or_create(
+        user=user,
+        defaults={
+            'sex': 'male',
+            'age_years': 25,
+            'height_cm': Decimal('175.0'),
+            'weight_kg': Decimal('75.0'),
+            'activity_level': 'moderate',
+        },
+    )
+
+    if request.method == 'GET':
+        return Response(NutritionProfileSerializer(profile).data, status=status.HTTP_200_OK)
+
+    partial = request.method == 'PATCH'
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = NutritionProfileSerializer(profile, data=data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def nutrition_goal(request):
+    """Get or update nutrition goal for the authenticated user."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    goal, _ = NutritionGoal.objects.get_or_create(
+        user=user,
+        defaults={
+            'goal_type': 'maintenance',
+            'calorie_adjustment_percent': Decimal('0'),
+            'protein_g_per_kg': Decimal('1.80'),
+            'fat_g_per_kg': Decimal('0.80'),
+        },
+    )
+
+    if request.method == 'GET':
+        return Response(NutritionGoalSerializer(goal).data, status=status.HTTP_200_OK)
+
+    partial = request.method == 'PATCH'
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = NutritionGoalSerializer(goal, data=data, partial=partial)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def nutrition_targets(request):
+    """Compute (and store) today's macro targets from saved profile + goal."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    target_date_str = request.GET.get('date')
+    if target_date_str:
+        try:
+            target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        target_date = timezone.localdate()
+
+    try:
+        profile = NutritionProfile.objects.get(user=user)
+        goal = NutritionGoal.objects.get(user=user)
+    except NutritionProfile.DoesNotExist:
+        return Response({'error': 'Nutrition profile not set.'}, status=status.HTTP_400_BAD_REQUEST)
+    except NutritionGoal.DoesNotExist:
+        return Response({'error': 'Nutrition goal not set.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        calc = _calculate_targets(profile, goal)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Upsert snapshot for the day
+    obj, _ = DailyMacroTarget.objects.update_or_create(
+        user=user,
+        date=target_date,
+        defaults={
+            'calories': calc['calories'],
+            'protein_g': calc['protein_g'],
+            'carbs_g': calc['carbs_g'],
+            'fat_g': calc['fat_g'],
+            'bmr': calc['bmr'],
+            'tdee': calc['tdee'],
+            'algorithm_version': calc['algorithm_version'],
+        },
+    )
+
+    return Response({
+        'date': target_date.isoformat(),
+        'profile': NutritionProfileSerializer(profile).data,
+        'goal': NutritionGoalSerializer(goal).data,
+        'targets': DailyMacroTargetSerializer(obj).data,
+        'calculation': {
+            'activity_multiplier': calc['activity_multiplier'],
+            'calorie_adjustment_percent': calc['calorie_adjustment_percent'],
+        },
+    }, status=status.HTTP_200_OK)
+
+
+def _parse_date_or_today(request, key='date'):
+    dstr = request.GET.get(key) or request.data.get(key)
+    if dstr:
+        try:
+            return datetime.strptime(dstr, '%Y-%m-%d').date(), None
+        except ValueError:
+            return None, Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+    return timezone.localdate(), None
+
+
+def _calc_day_totals(entries):
+    # Keep calories as integer-ish, macros as 1dp floats
+    total_cals = Decimal('0')
+    total_p = Decimal('0')
+    total_c = Decimal('0')
+    total_f = Decimal('0')
+    for e in entries:
+        s = Decimal(str(e.servings))
+        total_cals += Decimal(str(e.food.calories_kcal)) * s
+        total_p += Decimal(str(e.food.protein_g)) * s
+        total_c += Decimal(str(e.food.carbs_g)) * s
+        total_f += Decimal(str(e.food.fat_g)) * s
+    return {
+        'calories': int(round(float(total_cals))),
+        'protein_g': float(total_p.quantize(Decimal('0.1'))),
+        'carbs_g': float(total_c.quantize(Decimal('0.1'))),
+        'fat_g': float(total_f.quantize(Decimal('0.1'))),
+    }
+
+
+def _auto_adjust_from_checkins(goal_type, checkins, current_pct):
+    """
+    Heuristic auto-adjust:
+    - Uses last ~14+ days (requires >=2 points).
+    - fat_loss/recomp: if not losing, decrease calories by -5% (more deficit).
+      if losing too fast, increase by +3%.
+    - lean_bulk/bulk: if not gaining, increase by +5%.
+      if gaining too fast, decrease by -3%.
+    - maintenance: small nudges when drifting fast.
+    """
+    if len(checkins) < 2:
+        return None
+
+    # Use oldest->newest
+    ordered = sorted(checkins, key=lambda x: x.date)
+    start = ordered[0]
+    end = ordered[-1]
+    days = max(1, (end.date - start.date).days)
+    delta_kg = float(end.weight_kg) - float(start.weight_kg)  # + = gain
+    weekly_rate_kg = delta_kg / (days / 7.0)
+
+    # guard: if period too short, it's too noisy
+    if days < 10:
+        return None
+
+    # thresholds (kg/week)
+    # Fat loss: want negative; Bulk: want positive
+    if goal_type in ['fat_loss', 'recomp']:
+        if weekly_rate_kg > -0.05:  # basically not losing
+            return {'delta_pct': -5, 'reason': 'Progress stalled (not losing).', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+        if weekly_rate_kg < -0.9:  # losing too fast
+            return {'delta_pct': +3, 'reason': 'Losing too fast; easing deficit.', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+        return {'delta_pct': 0, 'reason': 'On track.', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+
+    if goal_type in ['lean_bulk', 'bulk']:
+        if weekly_rate_kg < 0.05:  # basically not gaining
+            return {'delta_pct': +5, 'reason': 'Progress stalled (not gaining).', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+        if weekly_rate_kg > 0.7:  # gaining too fast
+            return {'delta_pct': -3, 'reason': 'Gaining too fast; easing surplus.', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+        return {'delta_pct': 0, 'reason': 'On track.', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+
+    # maintenance
+    if abs(weekly_rate_kg) > 0.5:
+        return {'delta_pct': (-3 if weekly_rate_kg > 0 else +3), 'reason': 'Weight drifting; nudging calories.', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+    return {'delta_pct': 0, 'reason': 'Stable.', 'weekly_rate_kg': weekly_rate_kg, 'days': days, 'delta_kg': delta_kg}
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def nutrition_checkins(request):
+    """List/create weight check-ins for the authenticated user."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    if request.method == 'GET':
+        limit = request.GET.get('limit')
+        qs = WeightCheckIn.objects.filter(user=user).order_by('-date')
+        if limit:
+            try:
+                qs = qs[: max(1, min(100, int(limit)))]
+            except ValueError:
+                pass
+        return Response(WeightCheckInSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = WeightCheckInSerializer(data=data)
+    if serializer.is_valid():
+        # One per day: upsert
+        obj, _ = WeightCheckIn.objects.update_or_create(
+            user=user,
+            date=serializer.validated_data['date'],
+            defaults={'weight_kg': serializer.validated_data['weight_kg']},
+        )
+        return Response(WeightCheckInSerializer(obj).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def nutrition_checkin_delete(request, checkin_id):
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+    try:
+        obj = WeightCheckIn.objects.get(id=checkin_id, user=user)
+    except WeightCheckIn.DoesNotExist:
+        return Response({'error': 'Check-in not found.'}, status=status.HTTP_404_NOT_FOUND)
+    obj.delete()
+    return Response({'message': 'Check-in deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def nutrition_auto_adjust(request):
+    """
+    Compute (and optionally apply) an updated calorie_adjustment_percent based on weight check-ins.
+    Body: { apply: true|false }
+    """
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    apply = bool(request.data.get('apply', True))
+    # last ~21 days worth of points (up to 8)
+    since = timezone.localdate() - timedelta(days=21)
+    checkins = list(WeightCheckIn.objects.filter(user=user, date__gte=since).order_by('date'))
+    if len(checkins) < 2:
+        return Response({'error': 'Need at least 2 check-ins in the last 21 days.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        profile = NutritionProfile.objects.get(user=user)
+        goal = NutritionGoal.objects.get(user=user)
+    except NutritionProfile.DoesNotExist:
+        return Response({'error': 'Nutrition profile not set.'}, status=status.HTTP_400_BAD_REQUEST)
+    except NutritionGoal.DoesNotExist:
+        return Response({'error': 'Nutrition goal not set.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    current_pct = float(goal.calorie_adjustment_percent)
+    rec = _auto_adjust_from_checkins(goal.goal_type, checkins, current_pct)
+    if rec is None:
+        return Response({'error': 'Not enough data (need >=10 days span).'}, status=status.HTTP_400_BAD_REQUEST)
+
+    delta_pct = float(rec['delta_pct'])
+    proposed = max(-40.0, min(40.0, current_pct + delta_pct))
+
+    result = {
+        'current_calorie_adjustment_percent': current_pct,
+        'recommended_delta_percent': delta_pct,
+        'recommended_calorie_adjustment_percent': proposed,
+        'reason': rec['reason'],
+        'trend': {
+            'days': rec['days'],
+            'delta_kg': rec['delta_kg'],
+            'weekly_rate_kg': rec['weekly_rate_kg'],
+            'from': checkins[0].date.isoformat(),
+            'to': checkins[-1].date.isoformat(),
+        },
+        'applied': False,
+    }
+
+    if apply and delta_pct != 0:
+        goal.calorie_adjustment_percent = Decimal(str(proposed))
+        goal.save(update_fields=['calorie_adjustment_percent', 'updated_at'])
+        result['applied'] = True
+
+    # Return updated targets for today after (potential) adjustment
+    try:
+        calc = _calculate_targets(profile, goal)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    target_date = timezone.localdate()
+    obj, _ = DailyMacroTarget.objects.update_or_create(
+        user=user,
+        date=target_date,
+        defaults={
+            'calories': calc['calories'],
+            'protein_g': calc['protein_g'],
+            'carbs_g': calc['carbs_g'],
+            'fat_g': calc['fat_g'],
+            'bmr': calc['bmr'],
+            'tdee': calc['tdee'],
+            'algorithm_version': calc['algorithm_version'],
+        },
+    )
+
+    result['goal'] = NutritionGoalSerializer(goal).data
+    result['targets'] = DailyMacroTargetSerializer(obj).data
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def nutrition_foods(request):
+    """List/create foods in the user's personal catalog."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    if request.method == 'GET':
+        foods = FoodItem.objects.filter(user=user).order_by('name')
+        return Response(FoodItemSerializer(foods, many=True).data, status=status.HTTP_200_OK)
+
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = FoodItemSerializer(data=data)
+    if serializer.is_valid():
+        obj = serializer.save(user=user)
+        return Response(FoodItemSerializer(obj).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def nutrition_food_update(request, food_id):
+    """Update/delete a food in the user's catalog."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    try:
+        food = FoodItem.objects.get(id=food_id, user=user)
+    except FoodItem.DoesNotExist:
+        return Response({'error': 'Food not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'DELETE':
+        food.delete()
+        return Response({'message': 'Food deleted successfully.'}, status=status.HTTP_200_OK)
+
+    data = request.data.copy()
+    data.pop('user_id', None)
+    serializer = FoodItemSerializer(food, data=data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def nutrition_log(request):
+    """Get/add today's (or requested date) food log entries."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    log_date, derr = _parse_date_or_today(request, key='date')
+    if derr:
+        return derr
+
+    if request.method == 'GET':
+        entries = FoodLogEntry.objects.select_related('food').filter(user=user, date=log_date).order_by('-created_at')
+        return Response({
+            'date': log_date.isoformat(),
+            'entries': FoodLogEntrySerializer(entries, many=True).data,
+            'totals': _calc_day_totals(entries),
+        }, status=status.HTTP_200_OK)
+
+    # POST create entry
+    data = request.data.copy()
+    data.pop('user_id', None)
+    data['date'] = log_date.isoformat()
+    serializer = FoodLogEntrySerializer(data=data)
+    if serializer.is_valid():
+        food = serializer.validated_data['food']
+        if food.user_id != user.id:
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer.save(user=user)
+        entries = FoodLogEntry.objects.select_related('food').filter(user=user, date=log_date).order_by('-created_at')
+        return Response({
+            'date': log_date.isoformat(),
+            'entries': FoodLogEntrySerializer(entries, many=True).data,
+            'totals': _calc_day_totals(entries),
+        }, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def nutrition_log_delete(request, entry_id):
+    """Delete a single log entry."""
+    user, err = _authed_user_or_error(request)
+    if err:
+        return err
+
+    try:
+        entry = FoodLogEntry.objects.get(id=entry_id, user=user)
+    except FoodLogEntry.DoesNotExist:
+        return Response({'error': 'Entry not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    log_date = entry.date
+    entry.delete()
+    entries = FoodLogEntry.objects.select_related('food').filter(user=user, date=log_date).order_by('-created_at')
+    return Response({
+        'date': log_date.isoformat(),
+        'entries': FoodLogEntrySerializer(entries, many=True).data,
+        'totals': _calc_day_totals(entries),
+    }, status=status.HTTP_200_OK)
 
 # All amounts are stored and returned in USD
 def convert_between_currencies(amount, from_currency, to_currency):

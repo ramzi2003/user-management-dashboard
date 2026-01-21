@@ -27,6 +27,7 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import SalarySection from '../components/SalarySection';
 import Lakawon from '../components/Lakawon';
 import Productivity from '../components/Productivity';
+import HealthFitness from '../components/HealthFitness';
 import api from '../services/api';
 
 export default function Dashboard() {
@@ -130,7 +131,7 @@ export default function Dashboard() {
     },
     {
       id: 'productivity',
-      label: 'Productivity Tools',
+      label: 'Productivity',
       icon: <Clock className="w-5 h-5" />,
       color: 'text-indigo-500 dark:text-indigo-400'
     },
@@ -162,7 +163,7 @@ export default function Dashboard() {
 
   // Sidebar grouping: keep only the pages you actually use visible,
   // and put the rest inside a collapsible section.
-  const primarySectionIds = new Set(['home', 'salary', 'productivity', 'utilities']);
+  const primarySectionIds = new Set(['home', 'salary', 'productivity', 'health', 'utilities']);
   const primaryMenuItems = menuItems.filter((i) => primarySectionIds.has(i.id));
   const otherMenuItems = menuItems.filter((i) => !primarySectionIds.has(i.id));
   const otherSectionIds = new Set(otherMenuItems.map((i) => i.id));
@@ -199,7 +200,7 @@ export default function Dashboard() {
       home: <HomeSection darkMode={darkMode} />,
       finance: <FinanceSection darkMode={darkMode} />,
       salary: <SalarySection darkMode={darkMode} />,
-      health: <HealthSection darkMode={darkMode} />,
+      health: <HealthFitness darkMode={darkMode} />,
       productivity: <Productivity />,
       social: <SocialSection darkMode={darkMode} />,
       travel: <TravelSection darkMode={darkMode} />,
@@ -596,32 +597,6 @@ function FinanceSection({ darkMode }) {
 }
 
 
-function HealthSection({ darkMode }) {
-  return (
-    <div className="space-y-6">
-      <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Health & Fitness</h1>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
-          <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Weekly Activity</h3>
-          <div className="space-y-4">
-            <ProgressBar label="Steps" value={8234} max={10000} color="emerald" darkMode={darkMode} />
-            <ProgressBar label="Water Intake" value={6} max={8} color="blue" darkMode={darkMode} />
-            <ProgressBar label="Sleep" value={7.5} max={8} color="indigo" darkMode={darkMode} />
-          </div>
-        </div>
-        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-colors duration-300`}>
-          <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-4`}>Workouts This Week</h3>
-          <div className="space-y-2">
-            <WorkoutItem day="Monday" time="45 min" type="Running" darkMode={darkMode} />
-            <WorkoutItem day="Tuesday" time="60 min" type="Gym" darkMode={darkMode} />
-            <WorkoutItem day="Wednesday" time="30 min" type="Yoga" darkMode={darkMode} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ProductivitySection is now imported from ../components/Productivity.jsx
 
 function SocialSection({ darkMode }) {
@@ -781,34 +756,6 @@ function TransactionItem({ label, amount, date, darkMode }) {
       <p className={`text-sm font-medium ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : darkMode ? 'text-white' : 'text-gray-900'}`}>
         {amount}
       </p>
-    </div>
-  );
-}
-
-function ProgressBar({ label, value, max, color, darkMode }) {
-  const percentage = (value / max) * 100;
-  const colorClass = color === 'emerald' ? 'bg-emerald-500' : color === 'blue' ? 'bg-blue-500' : 'bg-indigo-500';
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-1">
-        <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{label}</span>
-        <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{value}/{max}</span>
-      </div>
-      <div className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2`}>
-        <div className={`${colorClass} h-2 rounded-full`} style={{ width: `${percentage}%` }}></div>
-      </div>
-    </div>
-  );
-}
-
-function WorkoutItem({ day, time, type, darkMode }) {
-  return (
-    <div className={`flex justify-between items-center p-3 ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} rounded-lg transition-colors duration-300`}>
-      <div>
-        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{day}</p>
-        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{type}</p>
-      </div>
-      <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{time}</p>
     </div>
   );
 }

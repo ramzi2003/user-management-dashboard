@@ -54,5 +54,17 @@ urlpatterns = [
     path('productivity/monthly-plans/create/', views.productivity_monthly_plan_create, name='productivity_monthly_plan_create'),
     path('productivity/monthly-plans/<int:plan_id>/delete/', views.productivity_monthly_plan_delete, name='productivity_monthly_plan_delete'),
     path('productivity/stats/', views.productivity_stats, name='productivity_stats'),
+
+    # Nutrition & Calories endpoints
+    path('nutrition/profile/', views.nutrition_profile, name='nutrition_profile'),
+    path('nutrition/goal/', views.nutrition_goal, name='nutrition_goal'),
+    path('nutrition/targets/', views.nutrition_targets, name='nutrition_targets'),
+    path('nutrition/foods/', views.nutrition_foods, name='nutrition_foods'),
+    path('nutrition/foods/<int:food_id>/', views.nutrition_food_update, name='nutrition_food_update'),
+    path('nutrition/log/', views.nutrition_log, name='nutrition_log'),
+    path('nutrition/log/<int:entry_id>/delete/', views.nutrition_log_delete, name='nutrition_log_delete'),
+    path('nutrition/checkins/', views.nutrition_checkins, name='nutrition_checkins'),
+    path('nutrition/checkins/<int:checkin_id>/delete/', views.nutrition_checkin_delete, name='nutrition_checkin_delete'),
+    path('nutrition/auto-adjust/', views.nutrition_auto_adjust, name='nutrition_auto_adjust'),
 ]
 
