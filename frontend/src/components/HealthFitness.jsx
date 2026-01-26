@@ -64,6 +64,7 @@ export default function HealthFitness({ darkMode }) {
   const [checkins, setCheckins] = useState([]);
   const [checkinDraft, setCheckinDraft] = useState({ weight_kg: '' });
   const [checkinLoading, setCheckinLoading] = useState(false);
+  const [hoveredCheckinId, setHoveredCheckinId] = useState(null);
 
   const applyGoalDefaults = (goalType) => {
     const defaults = {
@@ -218,13 +219,56 @@ export default function HealthFitness({ darkMode }) {
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   }, [checkins]);
 
-  // Prepare data for MUI X Charts
+  // Prepare data for MUI X Charts - 21 day window centered on today
   const chartData = useMemo(() => {
-    if (!checkinSeries.length) return { xAxis: [], series: [], ids: [] };
-    const xAxis = checkinSeries.map((c) => new Date(`${c.date}T00:00:00`));
-    const series = checkinSeries.map((c) => c._weight);
-    const ids = checkinSeries.map((c) => c.id);
-    return { xAxis, series, ids };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayIso = today.toISOString().slice(0, 10);
+    
+    // Create 21-day window: 10 days before, today, 10 days after
+    const allDates = [];
+    for (let i = -10; i <= 10; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      allDates.push(d.toISOString().slice(0, 10));
+    }
+    
+    // Create a map of existing check-ins
+    const checkinMap = new Map();
+    checkinSeries.forEach((c) => {
+      checkinMap.set(c.date, { weight: c._weight, id: c.id });
+    });
+    
+    // Fill in all dates (null for missing dates)
+    const xAxis = allDates.map((d) => new Date(`${d}T00:00:00`));
+    const series = allDates.map((d) => {
+      const checkin = checkinMap.get(d);
+      return checkin ? checkin.weight : null;
+    });
+    const ids = allDates.map((d) => {
+      const checkin = checkinMap.get(d);
+      return checkin ? checkin.id : null;
+    });
+    
+    // Group dates by month for top labels
+    const monthGroups = [];
+    let currentMonth = null;
+    let monthStart = 0;
+    xAxis.forEach((date, idx) => {
+      const month = date.toLocaleDateString('en-US', { month: 'long' });
+      if (month !== currentMonth) {
+        if (currentMonth !== null) {
+          monthGroups.push({ month: currentMonth, start: monthStart, end: idx - 1 });
+        }
+        currentMonth = month;
+        monthStart = idx;
+      }
+    });
+    if (currentMonth !== null) {
+      monthGroups.push({ month: currentMonth, start: monthStart, end: xAxis.length - 1 });
+    }
+    
+    return { xAxis, series, ids, todayDate: new Date(`${todayIso}T00:00:00`), monthGroups };
   }, [checkinSeries]);
 
   const addFoodToToday = async () => {
@@ -1124,102 +1168,141 @@ export default function HealthFitness({ darkMode }) {
             </div>
 
             <div className="mt-4">
-              <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-2`}>Graph</h4>
-              <div className={`rounded-lg border ${darkMode ? 'border-gray-700 bg-gray-900/20' : 'border-gray-200 bg-gray-50/50'}`}>
-                {chartData.xAxis.length === 0 ? (
-                  <div className={`h-[300px] flex items-center justify-center ${mutedText}`}>
-                    No check-ins yet
+              <div className={`relative ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-4`}>
+                {/* Month labels at top */}
+                {chartData.monthGroups && chartData.monthGroups.length > 0 && (
+                  <div className="absolute top-4 left-[50px] right-[20px] z-10 pointer-events-none">
+                    {chartData.monthGroups.map((group, i) => {
+                      const totalDays = chartData.xAxis.length;
+                      const startPercent = (group.start / (totalDays - 1)) * 100;
+                      const endPercent = (group.end / (totalDays - 1)) * 100;
+                      const centerPercent = (startPercent + endPercent) / 2;
+                      return (
+                        <span
+                          key={i}
+                          className={`absolute text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                          style={{ left: `${centerPercent}%`, transform: 'translateX(-50%)' }}
+                        >
+                          {group.month}
+                        </span>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <div className="relative">
-                    <LineChart
-                      xAxis={[
-                        {
-                          data: chartData.xAxis,
-                          scaleType: 'time',
-                          valueFormatter: (v) => formatDateLabel(v.toISOString().slice(0, 10)),
-                          tickLabelStyle: { fill: darkMode ? '#9CA3AF' : '#6B7280', fontSize: 12 },
+                )}
+                <LineChart
+                  xAxis={[
+                    {
+                      data: chartData.xAxis,
+                      scaleType: 'time',
+                      valueFormatter: (v) => {
+                        const d = new Date(v);
+                        return String(d.getDate());
+                      },
+                      tickLabelStyle: { fill: darkMode ? '#6B7280' : '#6B7280', fontSize: 12 },
+                      tickNumber: 6,
+                      disableLine: true,
+                      disableTicks: true,
+                    },
+                  ]}
+                  yAxis={[
+                    {
+                      tickLabelStyle: { fill: darkMode ? '#6B7280' : '#6B7280', fontSize: 12 },
+                      disableLine: true,
+                      disableTicks: true,
+                    },
+                  ]}
+                  series={[
+                    {
+                      data: chartData.series,
+                      curve: 'catmullRom',
+                      color: '#3B82F6',
+                      showMark: true,
+                      valueFormatter: (v) => (v != null ? `${v?.toFixed(1)}` : ''),
+                      area: true,
+                    },
+                  ]}
+                  height={320}
+                  margin={{ left: 50, right: 20, top: 50, bottom: 50 }}
+                  onItemClick={(event, item) => {
+                    if (item && chartData.ids[item.dataIndex] != null) {
+                      setHoveredCheckinId(chartData.ids[item.dataIndex]);
+                    }
+                  }}
+                  sx={{
+                    '& .MuiAreaElement-root': {
+                      fill: 'rgba(59,130,246,0.15)',
+                    },
+                    '& .MuiLineElement-root': {
+                      strokeWidth: 2.5,
+                      stroke: '#3B82F6',
+                    },
+                    '& .MuiMarkElement-root': {
+                      fill: '#3B82F6',
+                      stroke: '#3B82F6',
+                      strokeWidth: 2,
+                      scale: '1.1',
+                      cursor: 'pointer',
+                    },
+                    '& .MuiChartsAxis-line': {
+                      stroke: 'none',
+                    },
+                    '& .MuiChartsAxis-tick': {
+                      stroke: 'none',
+                    },
+                    '& .MuiChartsGrid-line': {
+                      stroke: '#E5E7EB',
+                      strokeDasharray: '3 3',
+                      strokeWidth: 1,
+                    },
+                    backgroundColor: 'transparent',
+                  }}
+                  grid={{ horizontal: true }}
+                  slotProps={{
+                    popper: {
+                      sx: {
+                        '& .MuiChartsTooltip-root': {
+                          backgroundColor: '#111827',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                          padding: '8px 12px',
                         },
-                      ]}
-                      yAxis={[
-                        {
-                          tickLabelStyle: { fill: darkMode ? '#9CA3AF' : '#6B7280', fontSize: 12 },
+                        '& .MuiChartsTooltip-cell': {
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '600',
                         },
-                      ]}
-                      series={[
-                        {
-                          data: chartData.series,
-                          curve: 'catmullRom',
-                          color: darkMode ? '#60A5FA' : '#3B82F6',
-                          showMark: true,
-                          valueFormatter: (v) => `${v?.toFixed(1)} kg`,
-                        },
-                      ]}
-                      height={300}
-                      margin={{ left: 50, right: 20, top: 20, bottom: 40 }}
-                      sx={{
-                        '& .MuiLineElement-root': {
-                          strokeWidth: 3,
-                        },
-                        '& .MuiMarkElement-root': {
-                          fill: darkMode ? '#93C5FD' : '#3B82F6',
-                          stroke: darkMode ? '#60A5FA' : '#3B82F6',
-                          strokeWidth: 2,
-                          scale: '1.2',
-                        },
-                        '& .MuiChartsAxis-line': {
-                          stroke: darkMode ? '#374151' : '#E5E7EB',
-                        },
-                        '& .MuiChartsAxis-tick': {
-                          stroke: darkMode ? '#374151' : '#E5E7EB',
-                        },
-                        '& .MuiChartsGrid-line': {
-                          stroke: darkMode ? '#1F2937' : '#F3F4F6',
-                        },
-                        backgroundColor: 'transparent',
+                      },
+                    },
+                  }}
+                />
+                {/* Goal indicator */}
+                {(() => {
+                  // Show goal weight if available (could be calculated from goal type)
+                  const targetWeight = goalDraft.goal_type === 'fat_loss' && profileDraft.weight_kg 
+                    ? (profileDraft.weight_kg * 0.9).toFixed(1) 
+                    : null;
+                  return targetWeight ? (
+                    <div className="absolute bottom-4 right-4 text-sm">
+                      <span className="text-gray-700">
+                        ↓ Goal: <span className="font-semibold">{targetWeight} kg</span>
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
+                {/* Delete button when point is clicked */}
+                {hoveredCheckinId && (
+                  <div className="absolute bottom-4 left-[50px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        deleteCheckin(hoveredCheckinId);
+                        setHoveredCheckinId(null);
                       }}
-                      grid={{ horizontal: true }}
-                      slotProps={{
-                        popper: {
-                          sx: {
-                            '& .MuiChartsTooltip-root': {
-                              backgroundColor: darkMode ? '#1F2937' : '#FFFFFF',
-                              border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`,
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                            },
-                            '& .MuiChartsTooltip-cell': {
-                              color: darkMode ? '#E5E7EB' : '#111827',
-                            },
-                          },
-                        },
-                      }}
-                    />
-                    {/* Delete buttons for each check-in point */}
-                    {checkinSeries.length > 0 && (
-                      <div className="mt-3 px-4 pb-4">
-                        <p className={`text-xs ${mutedText} mb-2`}>Click to delete a check-in:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {checkinSeries.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => deleteCheckin(c.id)}
-                              disabled={checkinLoading}
-                              className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition ${
-                                darkMode
-                                  ? 'bg-gray-700 hover:bg-red-900/50 text-gray-200 hover:text-red-300'
-                                  : 'bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600'
-                              }`}
-                            >
-                              <span>{formatDateLabel(c.date)}</span>
-                              <span className="font-semibold">{Number(c.weight_kg).toFixed(1)} kg</span>
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      disabled={checkinLoading}
+                      className="px-3 py-1.5 text-xs rounded-lg transition bg-red-50 hover:bg-red-100 text-red-600"
+                    >
+                      Delete
+                    </button>
                   </div>
                 )}
               </div>
