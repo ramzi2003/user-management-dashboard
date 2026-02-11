@@ -1885,6 +1885,9 @@ def productivity_tasks(request):
     thirty_days_ago = today - timedelta(days=30)
     Task.objects.filter(user=user, date__lt=thirty_days_ago, recurrence='once').delete()
     
+    # Reset current_count for tasks from previous days that haven't been reset
+    Task.objects.filter(user=user, date__lt=today, current_count__gt=0).update(current_count=0, completed=False)
+    
     # Create recurring tasks for target_date if they don't exist
     templates = Task.objects.filter(user=user, is_template=True)
     
@@ -1907,6 +1910,11 @@ def productivity_tasks(request):
             elif template.recurrence == 'weekdays':
                 # 0=Monday, 6=Sunday
                 should_create = target_date.weekday() < 5
+            elif template.recurrence == 'specific_days' and template.specific_days:
+                # Check if target_date's day is in specific_days
+                day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                target_day = day_names[target_date.weekday()]
+                should_create = target_day in template.specific_days.split(',')
             
             if should_create:
                 Task.objects.create(
@@ -1916,6 +1924,9 @@ def productivity_tasks(request):
                     date=target_date,
                     priority=template.priority,
                     recurrence=template.recurrence,
+                    specific_days=template.specific_days,
+                    frequency_per_day=template.frequency_per_day,
+                    current_count=0,
                     is_template=False,
                     completed=False
                 )
@@ -1941,6 +1952,8 @@ def productivity_task_create(request):
         return err
     
     recurrence = request.data.get('recurrence', 'once')
+    specific_days = request.data.get('specific_days', '')
+    frequency_per_day = request.data.get('frequency_per_day', 1)
     
     # If recurring task, create a template
     if recurrence != 'once':
@@ -1952,6 +1965,9 @@ def productivity_task_create(request):
             date=timezone.now().date(),  # Template date (not really used)
             priority=request.data.get('priority', 'medium'),
             recurrence=recurrence,
+            specific_days=specific_days,
+            frequency_per_day=frequency_per_day,
+            current_count=0,
             is_template=True,
             completed=False
         )
@@ -1961,7 +1977,7 @@ def productivity_task_create(request):
     data.pop('user_id', None)
     serializer = TaskSerializer(data=data)
     if serializer.is_valid():
-        task = serializer.save(user=user, is_template=False)
+        task = serializer.save(user=user, is_template=False, current_count=0)
         return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1984,6 +2000,17 @@ def productivity_task_update(request, task_id):
     old_recurrence = task.recurrence
     was_template = task.is_template
 
+    # Handle counter increment/decrement
+    if 'increment_count' in request.data:
+        # Increment counter
+        if task.current_count < task.frequency_per_day:
+            task.current_count += 1
+            if task.current_count >= task.frequency_per_day:
+                task.completed = True
+                task.completed_at = timezone.now()
+            task.save()
+        return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
+    
     # If marking as completed, set completed_at timestamp
     if request.data.get('completed') and not task.completed:
         task.completed_at = timezone.now()
@@ -2018,6 +2045,8 @@ def productivity_task_update(request, task_id):
                         title=saved_task.title,
                         scheduled_time=saved_task.scheduled_time,
                         recurrence=new_recurrence,
+                        specific_days=saved_task.specific_days,
+                        frequency_per_day=saved_task.frequency_per_day,
                         priority=saved_task.priority,
                     )
             else:
@@ -2038,6 +2067,9 @@ def productivity_task_update(request, task_id):
                             date=timezone.now().date(),  # template date is not used
                             priority=saved_task.priority,
                             recurrence=new_recurrence,
+                            specific_days=saved_task.specific_days,
+                            frequency_per_day=saved_task.frequency_per_day,
+                            current_count=0,
                             is_template=True,
                             completed=False,
                         )

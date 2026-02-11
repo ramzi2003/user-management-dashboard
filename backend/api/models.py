@@ -140,6 +140,7 @@ class Task(models.Model):
         ('once', 'One-time'),
         ('daily', 'Daily'),
         ('weekdays', 'Weekdays'),
+        ('specific_days', 'Specific Days'),
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks')
@@ -148,8 +149,14 @@ class Task(models.Model):
     date = models.DateField()
     completed = models.BooleanField(default=False)
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
-    recurrence = models.CharField(max_length=10, choices=RECURRENCE_CHOICES, default='once')
+    recurrence = models.CharField(max_length=15, choices=RECURRENCE_CHOICES, default='once')
     is_template = models.BooleanField(default=False)  # True if this is the recurring template
+    
+    # New fields for specific days and frequency tracking
+    specific_days = models.CharField(max_length=50, null=True, blank=True)  # Comma-separated: "Mon,Tue,Wed"
+    frequency_per_day = models.PositiveIntegerField(default=1)  # How many times per day
+    current_count = models.PositiveIntegerField(default=0)  # Current completion count
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)

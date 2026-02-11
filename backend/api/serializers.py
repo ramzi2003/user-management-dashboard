@@ -230,10 +230,15 @@ class SavingsSerializer(serializers.ModelSerializer):
 # Productivity Serializers
 class TaskSerializer(serializers.ModelSerializer):
     scheduled_time = serializers.TimeField(required=False, allow_null=True)
+    specific_days = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    frequency_per_day = serializers.IntegerField(required=False, default=1)
+    current_count = serializers.IntegerField(required=False, default=0)
 
     class Meta:
         model = Task
-        fields = ['id', 'title', 'scheduled_time', 'date', 'completed', 'priority', 'recurrence', 'is_template', 'created_at', 'updated_at', 'completed_at']
+        fields = ['id', 'title', 'scheduled_time', 'date', 'completed', 'priority', 'recurrence', 
+                  'is_template', 'specific_days', 'frequency_per_day', 'current_count', 
+                  'created_at', 'updated_at', 'completed_at']
         read_only_fields = ['is_template', 'created_at', 'updated_at', 'completed_at']
     
     def validate(self, data):
@@ -241,6 +246,11 @@ class TaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"title": "Title cannot be empty."})
         if 'date' not in data and self.instance is None:
             raise serializers.ValidationError({"date": "Date is required."})
+        
+        # Ensure frequency_per_day is at least 1
+        if 'frequency_per_day' in data and data['frequency_per_day'] < 1:
+            data['frequency_per_day'] = 1
+            
         return data
 
 
