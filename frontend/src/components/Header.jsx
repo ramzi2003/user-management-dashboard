@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 const dayNames = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -28,9 +28,8 @@ function getTitle(offset, date) {
   return `${monthNames[date.getMonth()]} ${date.getDate()}`;
 }
 
-function Header() {
+function Header({ selectedDay: selected, onSelectDay, getDayStats }) {
   const days = buildDays();
-  const [selected, setSelected] = useState(0);
   const scrollRef = useRef(null);
   const todayRef = useRef(null);
 
@@ -43,12 +42,8 @@ function Header() {
     container.scrollTo({ left: scrollLeft, behavior: 'instant' });
   }, []);
 
-  const handleSelect = (key) => {
-    setSelected(key);
-  };
-
-  const selectedDay = days.find((d) => d.key === selected);
-  const title = selectedDay ? getTitle(selectedDay.offset, selectedDay.date) : 'Today';
+  const selectedDayData = days.find((d) => d.key === selected);
+  const title = selectedDayData ? getTitle(selectedDayData.offset, selectedDayData.date) : 'Today';
 
   return (
     <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, backgroundColor: '#1a1a1a', padding: '0 16px', paddingBottom: '10px' }}>
@@ -69,11 +64,18 @@ function Header() {
       >
         {days.map((day) => {
           const isSelected = day.key === selected;
+          const { total, completed } = getDayStats ? getDayStats(day.key) : { total: 0, completed: 0 };
+          const hasTasks = total > 0;
+          const progress = hasTasks ? completed / total : 0;
+          const radius = 13;
+          const circumference = 2 * Math.PI * radius;
+          const strokeDashoffset = circumference * (1 - progress);
+          const showOutline = !hasTasks && isSelected;
           return (
             <div
               key={day.key}
               ref={day.key === 0 ? todayRef : undefined}
-              onClick={() => handleSelect(day.key)}
+              onClick={() => onSelectDay?.(day.key)}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -94,8 +96,49 @@ function Header() {
               <span style={{ fontSize: '11px', fontWeight: 500, color: isSelected ? '#ffffff' : '#555555', letterSpacing: '0.05em' }}>
                 {day.abbr}
               </span>
-              <span style={{ fontSize: '14px', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#ffffff' : '#888888' }}>
-                {day.num}
+              <span
+                style={{
+                  position: 'relative',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  border: showOutline ? '2px solid #14b8a6' : 'none',
+                  borderRadius: '50%',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {hasTasks && (
+                  <svg
+                    width="32"
+                    height="32"
+                    style={{ position: 'absolute', transform: 'rotate(-90deg)' }}
+                  >
+                    <circle
+                      cx="16"
+                      cy="16"
+                      r={radius}
+                      fill="none"
+                      stroke="#14b8a6"
+                      strokeWidth="2"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                )}
+                <span
+                  style={{
+                    position: 'relative',
+                    zIndex: 1,
+                    fontSize: '14px',
+                    fontWeight: isSelected ? 600 : 400,
+                    color: isSelected ? '#ffffff' : '#888888',
+                  }}
+                >
+                  {day.num}
+                </span>
               </span>
             </div>
           );
