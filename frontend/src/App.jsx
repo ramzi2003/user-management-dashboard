@@ -4,11 +4,13 @@ import NightScene from './components/NightScene';
 import TimeFilter from './components/TimeFilter';
 import TaskSection from './components/TaskSection';
 import Footer from './components/Footer';
+import PickNewOneSheet from './components/PickNewOneSheet';
 import { createInitialTasks } from './data/tasks';
 
 function App() {
   const [tasksByDay, setTasksByDay] = useState(() => ({ 0: createInitialTasks() }));
   const [selectedDay, setSelectedDay] = useState(0);
+  const [pickNewOneOpen, setPickNewOneOpen] = useState(false);
 
   useEffect(() => {
     if (tasksByDay[selectedDay] === undefined) {
@@ -48,7 +50,8 @@ function App() {
           setTasks={(updater) => setTasksForDay(selectedDay, updater)}
         />
       </div>
-      <Footer />
+      <Footer onPlusClick={() => setPickNewOneOpen(true)} />
+      <PickNewOneSheet open={pickNewOneOpen} onClose={() => setPickNewOneOpen(false)} />
     </div>
   );
 }

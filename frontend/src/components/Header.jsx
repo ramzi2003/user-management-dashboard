@@ -47,7 +47,7 @@ function Header({ selectedDay: selected, onSelectDay, getDayStats }) {
 
   return (
     <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, backgroundColor: '#1a1a1a', padding: '0 16px', paddingBottom: '10px' }}>
-      <h1 style={{ color: 'white', fontSize: '20px', textAlign: 'center', paddingTop: '48px', fontFamily: 'Inter, sans-serif', fontWeight: 500, letterSpacing: '0.02em' }}>
+      <h1 style={{ color: 'white', fontSize: '20px', textAlign: 'center', paddingTop: '48px', fontFamily: 'Inter, sans-serif', fontWeight: 300, letterSpacing: '0.02em' }}>
         {title}
       </h1>
 

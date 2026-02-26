@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function Footer() {
+function Footer({ onPlusClick }) {
   const [pressed, setPressed] = useState(false);
 
   return (
@@ -26,6 +26,8 @@ function Footer() {
 
       {/* Plus button */}
       <div
+        role="button"
+        onClick={onPlusClick}
         onPointerDown={() => setPressed(true)}
         onPointerUp={() => setPressed(false)}
         onPointerLeave={() => setPressed(false)}
@@ -46,12 +48,19 @@ function Footer() {
           zIndex: 2,
           transition: 'background-color 0.1s',
         }}>
-        <span style={{
-          color: '#ffffff',
-          fontSize: '40px',
-          fontWeight: 700,
-          lineHeight: 1,
-        }}>+</span>
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          style={{ display: 'block' }}
+        >
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
       </div>
     </div>
   );

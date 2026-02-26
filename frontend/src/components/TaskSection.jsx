@@ -130,13 +130,13 @@ function TaskSection({ tasks = [], setTasks }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
           <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon size={22} color={task.skipped || task.done ? '#555' : task.iconColor} strokeWidth={2} />
+            <Icon size={28} color={task.skipped || task.done ? '#555' : task.iconColor} strokeWidth={2} />
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ color: task.done || task.skipped ? '#555' : '#c8c8c8', fontSize: '15px', fontWeight: 400, textDecoration: 'none' }}>
+            <div style={{ color: task.done || task.skipped ? '#555' : '#c8c8c8', fontSize: '18px', fontWeight: 300, textDecoration: 'none' }}>
               {task.title}
             </div>
-            <div style={{ fontSize: '12px', marginTop: '2px' }}>
+            <div style={{ fontSize: '14px', marginTop: '2px' }}>
               {!task.skipped && !task.done && <span style={{ color: task.iconColor }}>★</span>}
               {!task.skipped && !task.done && ' '}
               <span style={{ color: task.done ? '#2e6b2e' : task.skipped ? '#3a6a94' : '#888' }}>
@@ -146,11 +146,11 @@ function TaskSection({ tasks = [], setTasks }) {
           </div>
         </div>
         <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          <div style={{ color: task.done || task.skipped ? '#555' : task.iconColor, fontSize: '15px', fontWeight: 600, textDecoration: 'none' }}>
+          <div style={{ color: task.done || task.skipped ? '#555' : task.iconColor, fontSize: '18px', fontWeight: 400, textDecoration: 'none' }}>
             {displayUnitValue(task.unitValue)}
           </div>
           {task.unitLabel && (
-            <div style={{ color: task.skipped || task.done ? '#444' : '#666', fontSize: '12px', marginTop: '2px' }}>
+            <div style={{ color: task.skipped || task.done ? '#444' : '#666', fontSize: '14px', marginTop: '2px' }}>
               {task.unitLabel}
             </div>
           )}
